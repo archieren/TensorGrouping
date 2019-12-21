@@ -48,7 +48,7 @@ class ResnetKeypointBuilder(object):
         return model
 
     @staticmethod
-    def make_deconv_layers(num_layers = 4,num_filters = [512, 256, 128, 64]):
+    def make_deconv_layers(num_layers = 5,num_filters = [512, 256, 128, 64, 32]):
         assert num_layers == len(num_filters), 'ERROR: num_deconv_layers is different len(num_deconv_filters)'
 
         def f(input):

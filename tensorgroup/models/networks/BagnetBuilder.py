@@ -70,12 +70,16 @@ def _shortcut(input, residual):
     # Should be int if network architecture is correctly configured.
     input_shape = KB.int_shape(input)
     residual_shape = KB.int_shape(residual)
+    print("{}.{}".format(input_shape,residual_shape))
     stride_width = int(round(input_shape[ROW_AXIS] / residual_shape[ROW_AXIS]))
     stride_height = int(round(input_shape[COL_AXIS] / residual_shape[COL_AXIS]))
     equal_channels = input_shape[CHANNEL_AXIS] == residual_shape[CHANNEL_AXIS]
 
     shortcut = input
     # 1 X 1 conv if shape is different. Else identity.
+    # In the first bottleneck of each _residual_block, this will be in case !
+    # 每一残差块的第一个瓶颈层，会出现这种情况？
+    # 原始论文的Pytorch实现，搞得太麻烦了！
     if stride_width > 1 or stride_height > 1 or not equal_channels:
         shortcut = KL.Conv2D(filters=residual_shape[CHANNEL_AXIS],
                              kernel_size=(1, 1),
@@ -87,74 +91,46 @@ def _shortcut(input, residual):
     return KL.add([shortcut, residual])
 
 
-def _residual_block(block_function, filters, repetitions, is_first_layer=False):
+def _residual_block(block_function, filters, repetitions, is_kernel_3, k3_stride):
     """Builds a residual block with repeating bottleneck blocks.
+    is_kernel_3 means many things for the first block
     """
     def f(input):
-        for i in range(repetitions):
-            init_strides = (1, 1)
-            if i == 0 and not is_first_layer: # 第一层残差块的第一层瓶颈层的init_strides仍为(1,1)
-                init_strides = (2, 2)
-            input = block_function(filters=filters, init_strides=init_strides,
-                                   is_first_block_of_first_layer=(is_first_layer and i == 0))(input)
+        # 第一个瓶颈层,有些特殊,而且和他的原型Resnet中对应的层处理的方式有差别！
+        # 即kernel和stride的设置有区别！
+        # 参见ResnetBuilder.py内的注释.
+        input = block_function(filters,k3_stride= k3_stride, is_kernel_3= is_kernel_3)(input)
+        for _ in range(1,repetitions):
+            input = block_function(filters=filters,k3_stride= 1,is_kernel_3= False)(input)
         return input
 
     return f
 
 
-def basic_block(filters, init_strides=(1, 1), is_first_block_of_first_layer=False):
-    """Basic 3 X 3 convolution blocks for use on resnets with layers <= 34.
-    Follows improved proposed scheme in http://arxiv.org/pdf/1603.05027v2.pdf
+
+def bottleneck(filters, is_kernel_3 = False, k3_stride = 1):
     """
-    def f(input):
-
-        if is_first_block_of_first_layer:
-            # don't repeat bn->relu since we just did bn->relu->maxpool
-            conv1 = KL.Conv2D(filters=filters, kernel_size=(3, 3),
-                              strides=init_strides,
-                              padding="same",
-                              kernel_initializer="he_normal",
-                              kernel_regularizer=KR.l2(1e-4))(input)
-        else:
-            conv1 = _bn_relu_conv(filters=filters, kernel_size=(3, 3),
-                                  strides=init_strides)(input)
-
-        residual = _bn_relu_conv(filters=filters, kernel_size=(3, 3))(conv1)
-        return _shortcut(input, residual)
-
-    return f
-
-
-def bottleneck(filters, init_strides=(1, 1), is_first_block_of_first_layer=False):
-    """Bottleneck architecture for > 34 layer resnet.
-    Follows improved proposed scheme in http://arxiv.org/pdf/1603.05027v2.pdf
-
+    The second _conv_bn_relu's kernel_size is determined by is_kernel_3
     Returns:
         A final conv layer of filters * 4
     """
     def f(input):
-
-        if is_first_block_of_first_layer:
-            # don't repeat bn->relu since we just did bn->relu->maxpool
-            conv_1_1 = KL.Conv2D(filters=filters, kernel_size=(1, 1),
-                                 strides=init_strides,
-                                 padding="same",
-                                 kernel_initializer="he_normal",
-                                 kernel_regularizer=KR.l2(1e-4))(input)
+        if is_kernel_3:
+            k3_size = 3
         else:
-            conv_1_1 = _bn_relu_conv(filters=filters, kernel_size=(1, 1),
-                                     strides=init_strides)(input)
+            k3_size = 1
 
-        conv_3_3 = _bn_relu_conv(filters=filters, kernel_size=(3, 3))(conv_1_1)
-        residual = _bn_relu_conv(filters=filters * 4, kernel_size=(1, 1))(conv_3_3)
+        conv_1_1 = _conv_bn_relu(filters=filters, kernel_size=(1, 1))(input)
+        conv_3_3 = _conv_bn_relu(filters=filters, kernel_size=(k3_size,k3_size),strides=(k3_stride, k3_stride))(conv_1_1)
+        residual = _conv_bn_relu(filters=filters * 4, kernel_size=(1, 1))(conv_3_3)
         return _shortcut(input, residual)
 
     return f
 
 
-class ResnetBuilder(object):
+class BagnetBuilder(object):
     @staticmethod
-    def build(input_shape, num_outputs, block_fn, repetitions):
+    def build(input_shape, num_outputs, block_fn, repetitions,k3,strides):
         """Builds a custom ResNet like architecture.
 
         Args:
@@ -170,15 +146,33 @@ class ResnetBuilder(object):
         """
         if len(input_shape) != 3:
             raise Exception("Input shape should be a tuple (nb_channels, nb_rows, nb_cols)")
+        
+        assert len(repetitions) == len(k3),      'ERROR: len(repetitions) is different len(k3)'
+        assert len(repetitions) == len(strides), 'ERROR: len(repetitions) is different len(strides)'
 
         input = KL.Input(shape=input_shape)
-        conv1 = _conv_bn_relu(filters=64, kernel_size=(7, 7), strides=(2, 2))(input)
-        pool1 = KL.MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding="same")(conv1)
+        conv0 = KL.Conv2D(  filters=64,
+                            kernel_size=(1,1),
+                            strides=(1,1), 
+                            padding="valid",
+                            kernel_initializer="he_normal",
+                            kernel_regularizer=KR.l2(1.e-4)
+                        )(input)
 
-        block = pool1
+        conv1 = _conv_bn_relu(  filters=64, 
+                                kernel_size=(3, 3),
+                                padding="valid"
+                            )(conv0)
+        
+        block = conv1
         filters = 64
         for i, r in enumerate(repetitions):
-            block = _residual_block(block_fn, filters=filters, repetitions=r, is_first_layer=(i == 0))(block)
+            block = _residual_block(block_fn, 
+                                    filters=filters, 
+                                    repetitions=r, 
+                                    is_kernel_3= True if k3[i]==1 else False,
+                                    k3_stride=strides[i]
+                                    )(block)
             filters *= 2
 
         # Last activation
@@ -195,22 +189,30 @@ class ResnetBuilder(object):
         model = KM.Model(inputs=input, outputs=dense)
         return model
 
-    @staticmethod
-    def build_resnet_18(input_shape, num_outputs):
-        return ResnetBuilder.build(input_shape, num_outputs, basic_block, [2, 2, 2, 2])
 
     @staticmethod
-    def build_resnet_34(input_shape, num_outputs):
-        return ResnetBuilder.build(input_shape, num_outputs, basic_block, [3, 4, 6, 3])
+    def build_bagnet_9(input_shape, num_outputs):
+        return BagnetBuilder.build(input_shape, 
+                                    num_outputs, 
+                                    bottleneck, 
+                                    repetitions= [3, 4, 6, 3],
+                                    k3= [1, 1, 0, 0],
+                                    strides=[2, 2, 2, 1])
 
     @staticmethod
-    def build_resnet_50(input_shape, num_outputs):
-        return ResnetBuilder.build(input_shape, num_outputs, bottleneck, [3, 4, 6, 3])
+    def build_bagnet_17(input_shape, num_outputs):
+        return BagnetBuilder.build(input_shape, 
+                                    num_outputs, 
+                                    bottleneck, 
+                                    repetitions= [3, 4, 23, 3],
+                                    k3 = [1, 1, 1, 0],
+                                    strides = [2, 2, 2, 1])
 
     @staticmethod
-    def build_resnet_101(input_shape, num_outputs):
-        return ResnetBuilder.build(input_shape, num_outputs, bottleneck, [3, 4, 23, 3])
-
-    @staticmethod
-    def build_resnet_152(input_shape, num_outputs):
-        return ResnetBuilder.build(input_shape, num_outputs, bottleneck, [3, 8, 36, 3])
+    def build_bagnet_33(input_shape, num_outputs):
+        return BagnetBuilder.build(input_shape, 
+                                    num_outputs, 
+                                    bottleneck, 
+                                    repetitions = [3, 8, 36, 3],
+                                    k3 = [1 , 1, 1, 1],
+                                    strides = [2, 2, 2, 1])
