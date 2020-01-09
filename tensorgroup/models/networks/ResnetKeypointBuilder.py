@@ -3,12 +3,156 @@ from __future__ import division
 
 import tensorflow as tf
 import numpy as np
-import tensorgroup.models.networks.ResnetBuilder as RES
+# import tensorgroup.models.networks.ResnetBuilder as RES
+# 算了，还是直接从ResnetBuilder里考过来
 KL = tf.keras.layers
 KM = tf.keras.models
 KB = tf.keras.backend
 KU = tf.keras.utils
 KR = tf.keras.regularizers
+
+ROW_AXIS = 1
+COL_AXIS = 2
+CHANNEL_AXIS = 3
+
+
+def _bn_relu(input):
+    """Helper to build a BN -> relu block
+    """
+    norm = KL.BatchNormalization(axis=CHANNEL_AXIS)(input)
+    return KL.Activation("relu")(norm)
+
+
+def _conv_bn_relu(**conv_params):
+    """Helper to build a conv -> BN -> relu block
+    """
+    filters = conv_params["filters"]
+    kernel_size = conv_params["kernel_size"]
+    strides = conv_params.setdefault("strides", (1, 1))
+    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
+    padding = conv_params.setdefault("padding", "same")
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", KR.l2(1.e-4))
+
+    def f(input):
+        conv = KL.Conv2D(filters=filters, kernel_size=kernel_size,
+                         strides=strides, padding=padding,
+                         kernel_initializer=kernel_initializer,
+                         kernel_regularizer=kernel_regularizer)(input)
+        return _bn_relu(conv)
+
+    return f
+
+
+def _bn_relu_conv(**conv_params):
+    """Helper to build a BN -> relu -> conv block.
+    This is an improved scheme proposed in http://arxiv.org/pdf/1603.05027v2.pdf
+    """
+    filters = conv_params["filters"]
+    kernel_size = conv_params["kernel_size"]
+    strides = conv_params.setdefault("strides", (1, 1))
+    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
+    padding = conv_params.setdefault("padding", "same")
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", KR.l2(1.e-4))
+
+    def f(input):
+        activation = _bn_relu(input)
+        return KL.Conv2D(filters=filters, kernel_size=kernel_size,
+                         strides=strides, padding=padding,
+                         kernel_initializer=kernel_initializer,
+                         kernel_regularizer=kernel_regularizer)(activation)
+
+    return f
+
+
+def _shortcut(input, residual):
+    """Adds a shortcut between input and residual block and merges them with "sum"
+    """
+    # Expand channels of shortcut to match residual.
+    # Stride appropriately to match residual (width, height)
+    # Should be int if network architecture is correctly configured.
+    input_shape = KB.int_shape(input)
+    residual_shape = KB.int_shape(residual)
+    stride_width = int(round(input_shape[ROW_AXIS] / residual_shape[ROW_AXIS]))
+    stride_height = int(round(input_shape[COL_AXIS] / residual_shape[COL_AXIS]))
+    equal_channels = input_shape[CHANNEL_AXIS] == residual_shape[CHANNEL_AXIS]
+
+    shortcut = input
+    # 1 X 1 conv if shape is different. Else identity.
+    if stride_width > 1 or stride_height > 1 or not equal_channels:
+        shortcut = KL.Conv2D(filters=residual_shape[CHANNEL_AXIS],
+                             kernel_size=(1, 1),
+                             strides=(stride_width, stride_height),
+                             padding="valid",
+                             kernel_initializer="he_normal",
+                             kernel_regularizer=KR.l2(0.0001))(input)
+
+    return KL.add([shortcut, residual])
+
+
+def _residual_block(block_function, filters, repetitions, is_first_layer=False):
+    """Builds a residual block with repeating bottleneck blocks.
+    """
+    def f(input):
+        for i in range(repetitions):
+            init_strides = (1, 1)
+            if i == 0 and not is_first_layer: # 第一层残差块的第一层瓶颈层的init_strides仍为(1,1)
+                init_strides = (2, 2)
+            input = block_function(filters=filters, init_strides=init_strides,
+                                   is_first_block_of_first_layer=(is_first_layer and i == 0))(input)
+        return input
+
+    return f
+
+
+def basic_block(filters, init_strides=(1, 1), is_first_block_of_first_layer=False):
+    """Basic 3 X 3 convolution blocks for use on resnets with layers <= 34.
+    Follows improved proposed scheme in http://arxiv.org/pdf/1603.05027v2.pdf
+    """
+    def f(input):
+
+        if is_first_block_of_first_layer:
+            # don't repeat bn->relu since we just did bn->relu->maxpool
+            conv1 = KL.Conv2D(filters=filters, kernel_size=(3, 3),
+                              strides=init_strides,
+                              padding="same",
+                              kernel_initializer="he_normal",
+                              kernel_regularizer=KR.l2(1e-4))(input)
+        else:
+            conv1 = _bn_relu_conv(filters=filters, kernel_size=(3, 3),
+                                  strides=init_strides)(input)
+
+        residual = _bn_relu_conv(filters=filters, kernel_size=(3, 3))(conv1)
+        return _shortcut(input, residual)
+
+    return f
+
+
+def bottleneck(filters, init_strides=(1, 1), is_first_block_of_first_layer=False):
+    """Bottleneck architecture for > 34 layer resnet.
+    Follows improved proposed scheme in http://arxiv.org/pdf/1603.05027v2.pdf
+
+    Returns:
+        A final conv layer of filters * 4
+    """
+    def f(input):
+
+        if is_first_block_of_first_layer:
+            # don't repeat bn->relu since we just did bn->relu->maxpool
+            conv_1_1 = KL.Conv2D(filters=filters, kernel_size=(1, 1),
+                                 strides=init_strides,
+                                 padding="same",
+                                 kernel_initializer="he_normal",
+                                 kernel_regularizer=KR.l2(1e-4))(input)
+        else:
+            conv_1_1 = _bn_relu_conv(filters=filters, kernel_size=(1, 1),
+                                     strides=init_strides)(input)
+
+        conv_3_3 = _bn_relu_conv(filters=filters, kernel_size=(3, 3))(conv_1_1)
+        residual = _bn_relu_conv(filters=filters * 4, kernel_size=(1, 1))(conv_3_3)
+        return _shortcut(input, residual)
+
+    return f
+
 
 
 class ResnetKeypointBuilder(object):
@@ -32,13 +176,13 @@ class ResnetKeypointBuilder(object):
             raise Exception("Input shape should be a tuple (nb_channels, nb_rows, nb_cols)")
 
         input = KL.Input(shape=input_shape)
-        conv1 = RES._conv_bn_relu(filters=64, kernel_size=(7, 7), strides=(2, 2))(input)
+        conv1 = _conv_bn_relu(filters=64, kernel_size=(7, 7), strides=(2, 2))(input)
         pool1 = KL.MaxPooling2D(pool_size=(3, 3), strides=(2, 2), padding="same")(conv1)
 
         block = pool1
         filters = 64
         for i, r in enumerate(repetitions):
-            block = RES._residual_block(block_fn, filters=filters, repetitions=r, is_first_layer=(i == 0))(block)
+            block = _residual_block(block_fn, filters=filters, repetitions=r, is_first_layer=(i == 0))(block)
             filters *= 2
 
         block = ResnetKeypointBuilder.make_deconv_layers()(block)
@@ -61,12 +205,12 @@ class ResnetKeypointBuilder(object):
 
     @staticmethod
     def build_pose_resnet_50(input_shape, num_outputs):
-        return ResnetKeypointBuilder.build(input_shape, num_outputs, RES.bottleneck, [3, 4, 6, 3])
+        return ResnetKeypointBuilder.build(input_shape, num_outputs, bottleneck, [3, 4, 6, 3])
 
     @staticmethod
     def build_pose_resnet_101(input_shape, num_outputs):
-        return ResnetKeypointBuilder.build(input_shape, num_outputs, RES.bottleneck, [3, 4, 23, 3])
+        return ResnetKeypointBuilder.build(input_shape, num_outputs, bottleneck, [3, 4, 23, 3])
 
     @staticmethod
     def build_pose_resnet_152(input_shape, num_outputs):
-        return ResnetKeypointBuilder.build(input_shape, num_outputs, RES.bottleneck, [3, 8, 36, 3])
+        return ResnetKeypointBuilder.build(input_shape, num_outputs, bottleneck, [3, 8, 36, 3])

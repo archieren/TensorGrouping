@@ -93,8 +93,8 @@ def _shortcut(input, residual):
                              kernel_regularizer=KR.l2(0.0001))(input)
         shortcut = shortcut[:,:residual_shape[ROW_AXIS],:residual_shape[ROW_AXIS],:]
     
-    print(shortcut.shape)
-    print(residual.shape)
+    #print(shortcut.shape)
+    #print(residual.shape)
     return KL.add([shortcut, residual])
 
 
@@ -160,7 +160,7 @@ def bottleneck(filters, is_kernel_3 = False, k3_stride = 1):
 
 class BagnetBuilder(object):
     @staticmethod
-    def build(input_shape, num_outputs, repetitions,k3,strides):
+    def build(input_shape, repetitions,k3,strides, num_outputs):
         """Builds a custom ResNet like architecture.
 
         Args:
@@ -220,28 +220,28 @@ class BagnetBuilder(object):
 
 
     @staticmethod
-    def build_bagnet_9(input_shape, num_outputs):
-        return BagnetBuilder.build(input_shape, 
-                                    num_outputs, 
+    def build_bagnet_9(input_shape=(9, 9, 3), num_outputs=1000):
+        return BagnetBuilder.build(input_shape,                                     
                                     #bottleneck, 
                                     repetitions= [3, 4, 6, 3],
                                     k3= [1, 1, 0, 0],
-                                    strides=[2, 2, 2, 1])
+                                    strides=[2, 2, 2, 1],
+                                    num_outputs=num_outputs)
 
     @staticmethod
-    def build_bagnet_17(input_shape, num_outputs):
+    def build_bagnet_17(input_shape=(17, 17, 3), num_outputs=1000):
         return BagnetBuilder.build(input_shape, 
-                                    num_outputs, 
                                     #bottleneck, 
                                     repetitions= [3, 4, 23, 3],
                                     k3 = [1, 1, 1, 0],
-                                    strides = [2, 2, 2, 1])
+                                    strides = [2, 2, 2, 1],
+                                    num_outputs=num_outputs)
 
     @staticmethod
-    def build_bagnet_33(input_shape, num_outputs):
+    def build_bagnet_33(input_shape=(33, 33, 3), num_outputs=1000):
         return BagnetBuilder.build(input_shape, 
-                                    num_outputs, 
                                     #bottleneck, 
                                     repetitions = [3, 8, 36, 3],
                                     k3 = [1 , 1, 1, 1],
-                                    strides = [2, 2, 2, 1])
+                                    strides = [2, 2, 2, 1],
+                                    num_outputs=num_outputs)
