@@ -15,6 +15,12 @@ from tensorgroup.models.networks.BagnetBuilder import BagnetBuilder as BB
 from tensorgroup.models.networks.CenterNetBuilder import CenterNetBuilder as CNB 
 
 import os
+import hashlib
+
+from tensorflow_datasets.core.download.download_manager_test import Artifact as AF
+from tensorflow_datasets.core.download import resource as RL
+
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # or any {'0', '1', '2'}
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH']='true'
 
@@ -22,7 +28,7 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH']='true'
 image_shape = (224, 224, 3)
 
 def about_model_ResnetKeypoint():
-    modelP = RKB.build_pose_resnet_50(input_shape = (224, 224, 3), num_outputs = 10)
+    modelP = RKB.build_keypoint_resnet_50(input_shape = (224, 224, 3), num_outputs = 10)
     modelP.summary()
 
 def about_model_BageNet():
@@ -53,11 +59,16 @@ def about_keras_model_InceptionResNetV2():
 #print(tfds.list_builders())
 #print( multiprocessing.cpu_count())
 
-def about_keras_model_CenterNet():
+def about_keras_model_CenterNet(which = "train"):
     train_model, prediction_model, debug_model = CNB.CenterNetOnResNet50V2(1000)
-    train_model.summary()
-    prediction_model.summary()
-    debug_model.summary()
+    if which == "train":
+        train_model.summary()
+    elif which == "pred":
+        prediction_model.summary()
+    elif which == "debug":
+        debug_model.summary()
+    else :
+        print("About which model of the centernet")
 
 def about_dataset_imagenet2012():
 
@@ -131,14 +142,50 @@ def about_dataset_voc():
                             )
     print(info_voc)
 
+def about_dataset_coco():
+    """
+    FeaturesDict({
+        'image': Image(shape=(None, None, 3), dtype=tf.uint8),
+        'image/filename': Text(shape=(), dtype=tf.string),
+        'image/id': Tensor(shape=(), dtype=tf.int64),
+        'objects': Sequence({
+            'area': Tensor(shape=(), dtype=tf.int64),
+            'bbox': BBoxFeature(shape=(4,), dtype=tf.float32),
+            'id': Tensor(shape=(), dtype=tf.int64),
+            'is_crowd': Tensor(shape=(), dtype=tf.bool),
+            'label': ClassLabel(shape=(), dtype=tf.int64, num_classes=80),
+        }),
+    })
+    """
+    """
+    x = RL.get_dl_fname("http://images.cocodataset.org/zips/test2017.zip"
+                        ,"c7908c3c9f94ba2f3340ebbeec58c25db6be8774f18d68c2f15d0e369d95baba")
+    print(x)
+
+    x = RL.get_dl_fname("http://images.cocodataset.org/zips/train2017.zip"
+                        ,"69a8bb58ea5f8f99d24875f21416de2e9ded3178e903f1f7603e283b9e06d929")
+    print(x)
+    """
+
+    coco_train, info_coco= tfds.load( name="coco/2017"
+                            , split="train"
+                            , with_info=True
+                            #, decoders={'image': tfds.decode.SkipDecoding(),}
+                            )
+    print(info_coco)
+    for example in coco_train:
+            #image = example['image']
+            #print(repr(example))
+            #plt.imshow(image)
+            #plt.show()
+            image_name = example['image/filename'] 
+            print("{}".format(image_name))   
+    
+
+
+
+
 def example():
-    """
-    def d_scale(record):
-        image, label = record['image'], record['label']    
-        image = tf.cast(image, tf.float32)
-        image /= 255
-        return image, label
-    """
 
     imagenet2012_train, _ = tfds.load(  name="imagenet2012"
                                         , split="train"
@@ -183,4 +230,5 @@ if __name__ == '__main__':
     #about_dataset_voc()
     #example()
     #about_keras_model_ResNet50V2()
-    about_keras_model_CenterNet()
+    #about_keras_model_CenterNet("pred")
+    about_dataset_coco()

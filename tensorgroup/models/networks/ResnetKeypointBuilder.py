@@ -204,13 +204,13 @@ class ResnetKeypointBuilder(object):
         return f
 
     @staticmethod
-    def build_pose_resnet_50(input_shape, num_outputs):
+    def build_keypoint_resnet_50(input_shape, num_outputs):
         return ResnetKeypointBuilder.build(input_shape, num_outputs, bottleneck, [3, 4, 6, 3])
 
     @staticmethod
-    def build_pose_resnet_101(input_shape, num_outputs):
+    def build_keypoint_resnet_101(input_shape, num_outputs):
         return ResnetKeypointBuilder.build(input_shape, num_outputs, bottleneck, [3, 4, 23, 3])
 
     @staticmethod
-    def build_pose_resnet_152(input_shape, num_outputs):
+    def build_keypoint_resnet_152(input_shape, num_outputs):
         return ResnetKeypointBuilder.build(input_shape, num_outputs, bottleneck, [3, 8, 36, 3])

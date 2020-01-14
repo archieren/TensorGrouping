@@ -170,14 +170,14 @@ class CenterNetBuilder(object):
     @staticmethod
     def CenterNetOnResNet50V2(num_classes
                     #, backbone='resnet50'
-                    , input_size=512
+                    , input_size=512  # 512 == 32*16
                     , max_objects=100
                     , score_threshold=0.1
                     , nms=True
                     , flip_test=False):
         #assert backbone in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
         output_size     = input_size // 4
-        image_input     = KL.Input(shape=(32*16, 32*16, 3))
+        image_input     = KL.Input(shape=(input_size, input_size, 3))
         hm_input        = KL.Input(shape=(output_size, output_size, num_classes))
         wh_input        = KL.Input(shape=(max_objects, 2))
         reg_input       = KL.Input(shape=(max_objects, 2))
@@ -187,7 +187,7 @@ class CenterNetBuilder(object):
 
         
         resnet = KA.ResNet50V2(weights='imagenet'
-                            , input_tensor=image_input #KL.Input(shape=(32*16, 32*16, 3) # 32*outputshape = inputshape
+                            , input_tensor=image_input #KL.Input(shape=(32*16, 32*16, 3) # 32*ResNetOutputSize = Inputsize
                             , include_top=False)
 
 
@@ -199,7 +199,7 @@ class CenterNetBuilder(object):
         x = KL.Dropout(rate=0.5)(C5)
         # decoder
         num_filters = [256, 128, 64]
-        for nf in num_filters:
+        for nf in num_filters: # (2**len(num_filters))*ResNetOutputSize = CenterNetOutputSize
             x = KL.Conv2DTranspose(nf
                                 , kernel_size=(4, 4)
                                 , strides=2
