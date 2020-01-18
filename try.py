@@ -1,13 +1,14 @@
 
 import multiprocessing
+import numpy as np
+import skimage.io as io
+
+from pycocotools.coco import COCO
 
 from matplotlib import pyplot as plt
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
-
-KA = tf.keras.applications
-KL = tf.keras.layers
 
 
 from  tensorgroup.models.networks.ResnetKeypointBuilder import ResnetKeypointBuilder as RKB
@@ -20,6 +21,8 @@ import hashlib
 from tensorflow_datasets.core.download.download_manager_test import Artifact as AF
 from tensorflow_datasets.core.download import resource as RL
 
+KA = tf.keras.applications
+KL = tf.keras.layers
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # or any {'0', '1', '2'}
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH']='true'
@@ -118,7 +121,7 @@ def about_dataset_voc():
                             , with_info=True
                             #, decoders={'image': tfds.decode.SkipDecoding(),}
                             )
-    print(info_voc)
+    #print(info_voc)
 
     """
     FeaturesDict({
@@ -135,12 +138,20 @@ def about_dataset_voc():
         }),
     })
     """
-    _, info_voc = tfds.load( name="voc/2012"
-                            #, split="train"
+
+    train_voc, info_voc = tfds.load( name="voc/2012"
+                            , split="train"
                             , with_info=True
                             #, decoders={'image': tfds.decode.SkipDecoding(),}
                             )
-    print(info_voc)
+    #print(info_voc)
+
+    for example in train_voc.take(10):
+        image = example['image']
+        print(image.shape)
+        plt.imshow(image)
+        plt.show()
+
 
 def about_dataset_coco():
     """
@@ -167,20 +178,68 @@ def about_dataset_coco():
     print(x)
     """
 
-    coco_train, info_coco= tfds.load( name="coco/2017"
+    _, info_coco= tfds.load( name="coco/2017"
                             , split="train"
                             , with_info=True
                             #, decoders={'image': tfds.decode.SkipDecoding(),}
                             )
     print(info_coco)
-    for example in coco_train:
-            #image = example['image']
-            #print(repr(example))
-            #plt.imshow(image)
-            #plt.show()
-            image_name = example['image/filename'] 
-            print("{}".format(image_name))   
+
+
+   
     
+
+def about_dataset_fashion_mnist():
+    dataset, metadata = tfds.load(name='fashion_mnist'
+                                    , as_supervised=True
+                                    , with_info=True
+                                    )
+    #train_dataset, test_dataset = dataset['train'], dataset['test']
+    print(metadata)
+
+
+def about_coco_api():
+    dataDir=os.path.expanduser('~/Data/COCO_2017') #要了解的是其目录结构！
+    dataType='train2017'
+    #annFile='{}/annotations/instances_{}.json'.format(dataDir,dataType)
+    annFile='{}/annotations/person_keypoints_{}.json'.format(dataDir,dataType)
+    
+    #一切都从这儿开始
+    #它，提供各种各样的查询
+    coco = COCO(annFile)
+    """
+    print(len(coco.getCatIds()))  #查询Cat的Ids
+    print(len(coco.getImgIds()))  #查询图像的Ids
+    cats = coco.loadCats(coco.getCatIds()) #
+    print(cats[0])
+    nms=[cat['name'] for cat in cats]
+    print('COCO categories: \n{}\n'.format(' '.join(nms)))
+
+    nms = set([cat['supercategory'] for cat in cats])
+    print('COCO supercategories: \n{}'.format(' '.join(nms)))
+    """
+    catIds = coco.getCatIds(catNms=['person'])
+    imgIds = coco.getImgIds(catIds = catIds)
+    img = coco.loadImgs(imgIds[np.random.randint(0,len(imgIds))])[0]
+
+   
+    # 加载并显示图片,可以使用两种方式: 1) 加载本地图片, 2) 在线加载远程图片
+    # 1) 使用本地路径, 对应关键字 "file_name"
+    I = io.imread('%s/%s/%s'%(dataDir,dataType,img['file_name']))  
+    # 2) 使用 url, 对应关键字 "coco_url"
+    # I = io.imread(img['coco_url']) 
+
+    plt.axis('off')
+    plt.imshow(I)
+    plt.show()
+    
+
+    # 加载并显示标注信息
+    plt.imshow(I); plt.axis('off')
+    annIds = coco.getAnnIds(imgIds=img['id'], iscrowd=None)
+    anns = coco.loadAnns(annIds)
+    coco.showAnns(anns)
+    plt.show()
 
 
 
@@ -227,8 +286,10 @@ def example():
 
 
 if __name__ == '__main__':
-    #about_dataset_voc()
+    about_dataset_voc()
     #example()
     #about_keras_model_ResNet50V2()
     #about_keras_model_CenterNet("pred")
-    about_dataset_coco()
+    #about_dataset_coco()
+    #about_dataset_fashion_mnist()
+    #about_coco_api()
