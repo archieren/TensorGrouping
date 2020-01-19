@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-from tensorgroup.models.data.image_augmentor import image_augmentor
+from tensorgroup.models.dataset.image_augmentor import image_augmentor
 
 
 def reform_voc_for_train(config):
@@ -33,7 +33,6 @@ def reform_voc_for_train(config):
         #std = tf.convert_to_tensor([0.229, 0.224, 0.225], dtype=tf.float32)
         """
         image = features['image']
-        shape = tf.shape(image)
         objects = features['objects']
         bbox = objects['bbox']
         ymin = tf.reshape(bbox[:,0], [-1, 1])
@@ -45,7 +44,6 @@ def reform_voc_for_train(config):
         ground_truth = tf.concat([ymin, ymax, xmin, xmax, classid], axis=1)
         # :param ground_truth: [ymin, ymax, xmin, xmax, classid]
         image, ground_truth = image_augmentor(  image=image,
-                                                input_shape=shape,
                                                 ground_truth=ground_truth,
                                                 **config
                                                 )

@@ -3,8 +3,8 @@ import tensorflow as tf
 
 
 def image_augmentor(image
-                    , input_shape
-                    , data_format
+                    #, input_shape
+                    , data_format 
                     , output_shape
                     , zoom_size=None
                     , crop_method=None
@@ -38,6 +38,7 @@ def image_augmentor(image
         :return ground_truth: [pad_truth_to, 5] [ycenter, xcenter, h, w, class_id]
 
     """
+
     if data_format not in ['channels_first', 'channels_last']:
         raise Exception("data_format must in ['channels_first', 'channels_last']!")
     if fill_mode not in ['CONSTANT', 'NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC']:
@@ -71,115 +72,54 @@ def image_augmentor(image
         if not rotate[1] <= rotate[2]:
             raise Exception("rotate[1] can't  grater than rotate[2]")
 
-    if fill_mode == 'CONSTANT':
+
+    image = tf.image.convert_image_dtype(image,tf.float32)
+    input_shape = tf.shape(image)
+    if data_format == 'channels_first':
+        image = tf.transpose(image, [1, 2, 0])
+    input_h, input_w, input_c = input_shape[0], input_shape[1], input_shape[2]
+    output_h, output_w = output_shape    
+
+    if fill_mode == 'CONSTANT':  #如果填充区为常量，则需保持 aspect_ratios
         keep_aspect_ratios = True
     fill_mode_project = {
         'NEAREST_NEIGHBOR': tf.image.ResizeMethod.NEAREST_NEIGHBOR,
         'BILINEAR': tf.image.ResizeMethod.BILINEAR,
         'BICUBIC': tf.image.ResizeMethod.BICUBIC
     }
-    if ground_truth is not None:
-        ymin = tf.reshape(ground_truth[:, 0], [-1, 1])
-        ymax = tf.reshape(ground_truth[:, 1], [-1, 1])
-        xmin = tf.reshape(ground_truth[:, 2], [-1, 1])
-        xmax = tf.reshape(ground_truth[:, 3], [-1, 1])
-        class_id = tf.reshape(ground_truth[:, 4], [-1, 1])
-
-    
-    if data_format == 'channels_first':
-        image = tf.transpose(image, [1, 2, 0])
-    input_h, input_w, input_c = input_shape[0], input_shape[1], input_shape[2]
-    output_h, output_w = output_shape
-    if zoom_size is not None:
-        zoom_or_output_h, zoom_or_output_w = zoom_size
-    else:
-        zoom_or_output_h, zoom_or_output_w = output_shape
-    
-    if keep_aspect_ratios:
-        if fill_mode in ['NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC']:
-            zoom_ratio = tf.cond(
-                tf.less(zoom_or_output_h / input_h, zoom_or_output_w / input_w),
-                lambda: tf.cast(zoom_or_output_h / input_h, tf.float32),
-                lambda: tf.cast(zoom_or_output_w / input_w, tf.float32)
-            )
-            resize_h, resize_w = tf.cond(
-                tf.less(zoom_or_output_h / input_h, zoom_or_output_w / input_w),
-                lambda: (zoom_or_output_h,tf.cast(tf.cast(input_w, tf.float32) * zoom_ratio, tf.int32)),
-                lambda: (tf.cast(tf.cast(input_h, tf.float32)*zoom_ratio, tf.int32), zoom_or_output_w)
-            )
-            image = tf.image.resize(
-                image, [resize_h, resize_w], method=fill_mode_project[fill_mode],
-                align_corners=True,
-            )
-            if ground_truth is not None:
-                ymin, ymax = ymin * zoom_ratio, ymax * zoom_ratio
-                xmin, xmax = xmin * zoom_ratio, xmax * zoom_ratio
-            image = tf.pad(
-                image, [[0, zoom_or_output_h-resize_h], [0, zoom_or_output_w-resize_w], [0, 0]],
-                mode='CONSTANT', constant_values=constant_values
-            )
-        else:
-            image = tf.pad(
-                image, [[0, zoom_or_output_h-input_h], [0, zoom_or_output_w-input_w], [0, 0]],
-                mode='CONSTANT', constant_values=constant_values
-            )
-    else:
-        image = tf.image.resize(image
-                                , [zoom_or_output_h, zoom_or_output_w]
+            
+    image = tf.image.resize(image
+                                , [output_h, output_w]
                                 , method=fill_mode_project[fill_mode]
-                                #, align_corners=True
                                 , preserve_aspect_ratio=False
-        )
-        if ground_truth is not None:
-            zoom_ratio_y = tf.cast(zoom_or_output_h / input_h, tf.float32)
-            zoom_ratio_x = tf.cast(zoom_or_output_w / input_w, tf.float32)
-            ymin, ymax = ymin * zoom_ratio_y, ymax * zoom_ratio_y
-            xmin, xmax = xmin * zoom_ratio_x, xmax * zoom_ratio_x
+    )
+    image = color_jitter(image, color_jitter_prob)
+    image , ground_truth = flip(image, ground_truth,flip_prob)
+    ground_truth =  filter_ground_truth(ground_truth)
+    ground_truth = yyxx_to_yxhw(ground_truth)
+    ground_truth =  pad_truth(ground_truth,pad_truth_to)
+    return image, ground_truth
 
-    if zoom_size is not None:
-        if crop_method == 'random':
-            random_h = zoom_or_output_h - output_h
-            random_w = zoom_or_output_w - output_w
-            crop_h = tf.random.uniform([], 0, random_h, tf.int32)
-            crop_w = tf.random.uniform([], 0, random_w, tf.int32)
-        else:
-            crop_h = (zoom_or_output_h - output_h) // 2
-            crop_w = (zoom_or_output_w - output_w) // 2
-        image = tf.slice(
-            image, [crop_h, crop_w, 0], [output_h, output_w, input_c]
-        )
-        if ground_truth is not None:
-            ymin, ymax = ymin - tf.cast(crop_h, tf.float32), ymax - tf.cast(crop_h, tf.float32)
-            xmin, xmax = xmin - tf.cast(crop_w, tf.float32), xmax - tf.cast(crop_w, tf.float32)
+    
 
+def flip(image,ground_truth,flip_prob):
+    ymin = tf.reshape(ground_truth[:, 0], [-1, 1])
+    ymax = tf.reshape(ground_truth[:, 1], [-1, 1])
+    xmin = tf.reshape(ground_truth[:, 2], [-1, 1])
+    xmax = tf.reshape(ground_truth[:, 3], [-1, 1])
+    class_id = tf.reshape(ground_truth[:, 4], [-1, 1])
 
-    if flip_prob is not None:
-        flip_td_prob = tf.random.uniform([], 0., 1.)
-        flip_lr_prob = tf.random.uniform([], 0., 1.)
-        image = tf.cond(
-            tf.less(flip_td_prob, flip_prob[0]),
-            lambda: tf.reverse(image, [0]),
-            lambda: image
-        )
-        image = tf.cond(
-            tf.less(flip_lr_prob, flip_prob[1]),
-            lambda: tf.reverse(image, [1]),
-            lambda: image
-        )
-        if ground_truth is not None:
-            ymax, ymin = tf.cond(
-                tf.less(flip_td_prob, flip_prob[0]),
-                lambda: (output_h - ymin -1., output_h - ymax -1.),
-                lambda: (ymax, ymin)
-            )
-            xmax, xmin = tf.cond(
-                tf.less(flip_lr_prob, flip_prob[1]),
-                lambda: (output_w - xmin -1., output_w - xmax - 1.),
-                lambda: (xmax, xmin)
-            )
+    flip_td_prob = tf.random.uniform([], 0., 1.)
+    flip_lr_prob = tf.random.uniform([], 0., 1.)
+    image = tf.cond(tf.less(flip_td_prob, flip_prob[0]),lambda: tf.reverse(image, [0]),lambda: image)
+    image = tf.cond(tf.less(flip_lr_prob, flip_prob[1]),lambda: tf.reverse(image, [1]),lambda: image)
+    ymax, ymin = tf.cond(tf.less(flip_td_prob, flip_prob[0]),lambda: (1.-ymin , 1.-ymax),lambda: (ymax, ymin))
+    xmax, xmin = tf.cond(tf.less(flip_lr_prob, flip_prob[1]),lambda: (1. - xmin, 1. - xmax),lambda: (xmax, xmin))  
+    
+    ground_truth = tf.concat([ymin,ymax,xmin,xmax,class_id], axis=-1)
+    return image, ground_truth  
 
-
-
+def color_jitter(image, color_jitter_prob):
     if color_jitter_prob is not None:
         bcs = tf.random.uniform([3], 0., 1.)
         image = tf.cond(bcs[0] < color_jitter_prob,
@@ -193,62 +133,57 @@ def image_augmentor(image
         image = tf.cond(bcs[2] < color_jitter_prob,
                         lambda: tf.image.adjust_hue(image, tf.random.uniform([], -0.1, 0.1)),
                         lambda: image
-                )
+                )    
+    return image
+
+def filter_ground_truth(ground_truth):
+    ymin = tf.reshape(ground_truth[:, 0], [-1, 1])
+    ymax = tf.reshape(ground_truth[:, 1], [-1, 1])
+    xmin = tf.reshape(ground_truth[:, 2], [-1, 1])
+    xmax = tf.reshape(ground_truth[:, 3], [-1, 1])
+    class_id = tf.reshape(ground_truth[:, 4], [-1, 1])
+
+    y_center = (ymin + ymax) / 2.
+    x_center = (xmin + xmax) / 2.
+    y_mask = tf.cast(y_center > 0., tf.float32) * tf.cast(y_center < 1., tf.float32)
+    x_mask = tf.cast(x_center > 0., tf.float32) * tf.cast(x_center < 1., tf.float32)
+    mask = tf.reshape((x_mask * y_mask) > 0., [-1])
+    ymin = tf.boolean_mask(ymin, mask)
+    xmin = tf.boolean_mask(xmin, mask)
+    ymax = tf.boolean_mask(ymax, mask)
+    xmax = tf.boolean_mask(xmax, mask)
+    class_id = tf.boolean_mask(class_id, mask)
+    ymin = tf.where(ymin < 0., 0., ymin)
+    xmin = tf.where(xmin < 0., 0., xmin)
+    ymax = tf.where(ymax < 0., 0., ymax)
+    xmax = tf.where(xmax < 0., 0., xmax)
+    ymin = tf.where(ymin > 1., 1., ymin)
+    xmin = tf.where(xmin > 1., 1., xmin)
+    ymax = tf.where(ymax > 1., 1., ymax)
+    xmax = tf.where(xmax > 1., 1., xmax)
+    ground_truth_= tf.concat([ymin, ymax, xmin, xmax, class_id], axis=-1)
     
-    """ tfa.image.rotate目前不可用，暂时就不用tensorflow-addons
-    if rotate is not None:
-        angles = tf.random.uniform([], rotate[1], rotate[2]) * 3.1415926 / 180.
-        image = tfa.image.rotate(image, angles, 'BILINEAR')
-        if ground_truth is not None:
-            angles = -angles
-            rotate_center_x = (output_w - 1.) / 2.
-            rotate_center_y = (output_h - 1.) / 2.
-            offset_x = rotate_center_x * (1-tf.cos(angles)) + rotate_center_y * tf.sin(angles)
-            offset_y = rotate_center_y * (1-tf.cos(angles)) - rotate_center_x * tf.sin(angles)
-            xminymin_x = xmin * tf.cos(angles) - ymin * tf.sin(angles) + offset_x
-            xminymin_y = xmin * tf.sin(angles) + ymin * tf.cos(angles) + offset_y
-            xmaxymax_x = xmax * tf.cos(angles) - ymax * tf.sin(angles) + offset_x
-            xmaxymax_y = xmax * tf.sin(angles) + ymax * tf.cos(angles) + offset_y
-            xminymax_x = xmin * tf.cos(angles) - ymax * tf.sin(angles) + offset_x
-            xminymax_y = xmin * tf.sin(angles) + ymax * tf.cos(angles) + offset_y
-            xmaxymin_x = xmax * tf.cos(angles) - ymin * tf.sin(angles) + offset_x
-            xmaxymin_y = xmax * tf.sin(angles) + ymin * tf.cos(angles) + offset_y
-            xmin = tf.reduce_min(tf.concat([xminymin_x, xmaxymax_x, xminymax_x, xmaxymin_x], axis=-1), axis=-1, keepdims=True)
-            ymin = tf.reduce_min(tf.concat([xminymin_y, xmaxymax_y, xminymax_y, xmaxymin_y], axis=-1), axis=-1, keepdims=True)
-            xmax = tf.reduce_max(tf.concat([xminymin_x, xmaxymax_x, xminymax_x, xmaxymin_x], axis=-1), axis=-1, keepdims=True)
-            ymax = tf.reduce_max(tf.concat([xminymin_y, xmaxymax_y, xminymax_y, xmaxymin_y], axis=-1), axis=-1, keepdims=True)
-    """
-    if data_format == 'channels_first':
-        image = tf.transpose(image, [2, 0, 1])
-    if ground_truth is not None:
-        y_center = (ymin + ymax) / 2.
-        x_center = (xmin + xmax) / 2.
-        y_mask = tf.cast(y_center > 0., tf.float32) * tf.cast(y_center < output_h - 1., tf.float32)
-        x_mask = tf.cast(x_center > 0., tf.float32) * tf.cast(x_center < output_w - 1., tf.float32)
-        mask = tf.reshape((x_mask * y_mask) > 0., [-1])
-        ymin = tf.boolean_mask(ymin, mask)
-        xmin = tf.boolean_mask(xmin, mask)
-        ymax = tf.boolean_mask(ymax, mask)
-        xmax = tf.boolean_mask(xmax, mask)
-        class_id = tf.boolean_mask(class_id, mask)
-        ymin = tf.where(ymin < 0., ymin - ymin, ymin)
-        xmin = tf.where(xmin < 0., xmin - xmin, xmin)
-        ymax = tf.where(ymax < 0., ymax - ymax, ymax)
-        xmax = tf.where(xmax < 0., xmax - xmax, xmax)
-        ymin = tf.where(ymin > output_h - 1., ymin - ymin + output_h - 1., ymin)
-        xmin = tf.where(xmin > output_w - 1., xmin - xmin + output_w - 1., xmin)
-        ymax = tf.where(ymax > output_h - 1., ymax - ymax + output_h - 1., ymax)
-        xmax = tf.where(xmax > output_w - 1., xmax - xmax + output_w - 1., xmax)
-        y = (ymin + ymax) / 2.
-        x = (xmin + xmax) / 2.
-        h = ymax - ymin
-        w = xmax - xmin
-        ground_truth_ = tf.concat([y, x, h, w, class_id], axis=-1)
-        print(tf.shape(ground_truth_))
-        ground_truth = tf.pad(  ground_truth_, 
-                                [[0, pad_truth_to-tf.shape(ground_truth_)[0]], [0, 0]],
-                                constant_values=-1.0
-                            )
-        return image, ground_truth
-    else:
-        return image
+    
+
+    return ground_truth_
+
+def yyxx_to_yxhw(ground_truth):
+    ymin = tf.reshape(ground_truth[:, 0], [-1, 1])
+    ymax = tf.reshape(ground_truth[:, 1], [-1, 1])
+    xmin = tf.reshape(ground_truth[:, 2], [-1, 1])
+    xmax = tf.reshape(ground_truth[:, 3], [-1, 1])
+    class_id = tf.reshape(ground_truth[:, 4], [-1, 1])
+    y = (ymin + ymax) / 2.
+    x = (xmin + xmax) / 2.
+    h = ymax - ymin
+    w = xmax - xmin 
+    ground_truth_= tf.concat([y, x, h, w, class_id], axis=-1)
+    return ground_truth_ 
+
+def pad_truth(ground_truth, pad_truth_to):
+    ground_truth_ = tf.pad(  ground_truth, 
+                            [[0, pad_truth_to -tf.shape(ground_truth)[0]], [0, 0]],
+                            constant_values=-1.0
+                        )
+    return ground_truth_
+      
