@@ -41,14 +41,32 @@ def reform_voc_for_train(config):
         xmax = tf.reshape(bbox[:,3], [-1, 1])
         classid = tf.dtypes.cast(objects['label'], dtype = tf.float32)
         classid = tf.reshape(classid, [-1, 1])
-        ground_truth = tf.concat([ymin, ymax, xmin, xmax, classid], axis=1)
+        ground_truth = tf.concat([ymin, ymax, xmin, xmax, classid], axis=1) # yyxx形式！
         # :param ground_truth: [ymin, ymax, xmin, xmax, classid]
+        image = normalize_image(image)
         image, ground_truth = image_augmentor(  image=image,
                                                 ground_truth=ground_truth,
                                                 **config
                                                 )
         return image , ground_truth
     return reformer
+
+
+def normalize_image(image,
+                    offset  =(0.485, 0.456, 0.406),
+                    scale   =(0.229, 0.224, 0.225)):
+    """Normalizes the image to zero mean and unit variance."""
+    image = tf.image.convert_image_dtype(image, dtype=tf.float32)
+    offset = tf.constant(offset)
+    offset = tf.expand_dims(offset, axis=0)
+    offset = tf.expand_dims(offset, axis=0)
+    image -= offset
+
+    scale = tf.constant(scale)
+    scale = tf.expand_dims(scale, axis=0)
+    scale = tf.expand_dims(scale, axis=0)
+    image /= scale
+    return image
 
 
 def get_voc_generator():

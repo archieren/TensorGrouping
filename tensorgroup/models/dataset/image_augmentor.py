@@ -3,35 +3,23 @@ import tensorflow as tf
 
 
 def image_augmentor(image
-                    #, input_shape
-                    , data_format 
-                    , output_shape
-                    , zoom_size=None
-                    , crop_method=None
-                    , flip_prob=None
+                    , ground_truth
+                    , data_format = 'channels_last'
+                    , output_shape = [384, 384]
+                    , flip_prob= [0., 0.5]
                     , fill_mode='BILINEAR'
-                    , keep_aspect_ratios=False
-                    , constant_values=0.
-                    , color_jitter_prob=None
-                    , rotate=None
-                    , ground_truth=None
-                    , pad_truth_to=None):
+                    , color_jitter_prob=0.5
+                    , pad_truth_to= 100):   # max-objects in an image
 
     """
     Args:
-        :param image: HWC or CHW
-        :param input_shape: [h, w]
+        :param image: HWC
+        :param ground_truth: [ymin, ymax, xmin, xmax, classid]     # Normalized !!!  
         :param data_format: 'channels_first', 'channels_last'
         :param output_shape: [h, w]
-        :param zoom_size: [h, w]
-        :param crop_method: 'random', 'center'
         :param flip_prob: [flip_top_down_prob, flip_left_right_prob]
-        :param fill_mode: 'CONSTANT', 'NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC'
-        :param keep_aspect_ratios: True, False
-        :param constant_values:
+        :param fill_mode: NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC'
         :param color_jitter_prob: prob of color_jitter
-        :param rotate: [prob, min_angle, max_angle]
-        :param ground_truth: [ymin, ymax, xmin, xmax, classid]
         :param pad_truth_to: pad ground_truth to size [pad_truth_to, 5] with -1
     Rerurns:
         :return image: output_shape
@@ -39,49 +27,21 @@ def image_augmentor(image
 
     """
 
-    if data_format not in ['channels_first', 'channels_last']:
-        raise Exception("data_format must in ['channels_first', 'channels_last']!")
-    if fill_mode not in ['CONSTANT', 'NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC']:
-        raise Exception("fill_mode must in ['CONSTANT', 'NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC']!")
-    if fill_mode == 'CONSTANT' and zoom_size is not None:
-        raise Exception("if fill_mode is 'CONSTANT', zoom_size can't be None!")
-    if zoom_size is not None:
-        if keep_aspect_ratios:
-            if constant_values is None:
-                raise Exception('please provide constant_values!')
-        if not zoom_size[0] >= output_shape[0] and zoom_size[1] >= output_shape[1]:
-            raise Exception("output_shape can't greater that zoom_size!")
-        if crop_method not in ['random', 'center']:
-            raise Exception("crop_method must in ['random', 'center']!")
-        if fill_mode is 'CONSTANT' and constant_values is None:
-            raise Exception("please provide constant_values!")
+    if data_format not in ['channels_last']:
+        raise Exception("data_format must in ['channels_last']!")
+    if fill_mode not in [ 'NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC']:
+        raise Exception("fill_mode must in ['NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC']!")
+
     if color_jitter_prob is not None:
         if not 0. <= color_jitter_prob <= 1.:
             raise Exception("color_jitter_prob can't less that 0.0, and can't grater that 1.0")
     if flip_prob is not None:
         if not 0. <= flip_prob[0] <= 1. and 0. <= flip_prob[1] <= 1.:
             raise Exception("flip_prob can't less than 0.0, and can't grater than 1.0")
-    if rotate is not None:
-        if len(rotate) != 3:
-            raise Exception('please provide "rotate" parameter as [rotate_prob, min_angle, max_angle]!')
-        if not 0. <= rotate[0] <= 1.:
-            raise Exception("rotate prob can't less that 0.0, and can't grater that 1.0")
-        if ground_truth is not None:
-            if not -5. <= rotate[1] <= 5. and -5. <= rotate[2] <= 5.:
-                raise Exception('rotate range must be -5 to 5, otherwise coordinate mapping become imprecise!')
-        if not rotate[1] <= rotate[2]:
-            raise Exception("rotate[1] can't  grater than rotate[2]")
 
-
-    image = tf.image.convert_image_dtype(image,tf.float32)
-    input_shape = tf.shape(image)
-    if data_format == 'channels_first':
-        image = tf.transpose(image, [1, 2, 0])
-    input_h, input_w, input_c = input_shape[0], input_shape[1], input_shape[2]
+    #image = tf.image.convert_image_dtype(image,tf.float32)
     output_h, output_w = output_shape    
 
-    if fill_mode == 'CONSTANT':  #如果填充区为常量，则需保持 aspect_ratios
-        keep_aspect_ratios = True
     fill_mode_project = {
         'NEAREST_NEIGHBOR': tf.image.ResizeMethod.NEAREST_NEIGHBOR,
         'BILINEAR': tf.image.ResizeMethod.BILINEAR,
@@ -96,7 +56,7 @@ def image_augmentor(image
     image = color_jitter(image, color_jitter_prob)
     image , ground_truth = flip(image, ground_truth,flip_prob)
     ground_truth =  filter_ground_truth(ground_truth)
-    ground_truth = yyxx_to_yxhw(ground_truth)
+    ground_truth =  yyxx_to_yxhw(ground_truth)
     ground_truth =  pad_truth(ground_truth,pad_truth_to)
     return image, ground_truth
 
