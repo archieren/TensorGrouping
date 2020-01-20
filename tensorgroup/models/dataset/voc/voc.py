@@ -32,20 +32,27 @@ voc_classes = {
 class VocInput(object):    #我在这里用Functional Object提供自己一个范式！
     def __init__(self
                 , mode :Text = ModeKey.TRAIN     # 还未用！但有用的！
-                , batch_size:int = 2
-                , num_exsamples:int = 10):
+                , batch_size:Optional[int] = -1
+                , num_exsamples:Optional[int] = -1):
         assert mode is not None
         self._mode = mode
         self._batch_size= batch_size
         self._num_examples= num_exsamples
+        #
+        self._num_classes = len(voc_classes)
 
     def __call__(self, config):
         if self._mode == ModeKey.TRAIN :
             dataset=self._get_voc_dataset(split='train')
-            inputs_def = Define_Inputs(config,image_normalizer = Image_Normalizer())
-            dataset = dataset.map(inputs_def) # 定义输入的内容、格式！
-            dataset = dataset.take(self._num_examples)
-            dataset = dataset.batch(self._batch_size)
+            inputs_def = Define_Inputs(config
+                                        ,num_classes = self._num_classes
+                                        ,image_normalizer = Image_Normalizer())
+            dataset = dataset.map(inputs_def) # 定义输入的内容、格式！ dataset = (.....)
+            if self._num_examples > 0:
+                dataset = dataset.take(self._num_examples) 
+            if self._batch_size > 0:
+                dataset = dataset.batch(self._batch_size)
+   
             return dataset
         else :
             raise ValueError("TODO")
@@ -75,9 +82,10 @@ class VocInput(object):    #我在这里用Functional Object提供自己一个�
         return dataset   
 
 class Define_Inputs(object):
-    def __init__(self, config,image_normalizer):
+    def __init__(self, config,num_classes , image_normalizer):
         self._config = config
         self._image_normalizer = image_normalizer
+        self._num_classes = num_classes
 
 
     def __call__(self,features):
@@ -110,16 +118,19 @@ class Define_Inputs(object):
         image = features['image']
 
         # yxyx--> yyxx
-        ground_truth = self._get_groundtruth(features)
+        ground_truth = self._get_groundtruth_in_yyxx(features)
         #ground_truth: [ymin, ymax, xmin, xmax, classid]
         image = self._image_normalizer(image)
+        # yyxx --> yxhw
         image, ground_truth = image_augmentor(  image=image,
                                                 ground_truth=ground_truth,
                                                 **self._config
                                                 )
-        return image , ground_truth        
+        #ground_truth: [y_center, x_center, height, width, classid]
+        heatmap = self._def_inputs(image,ground_truth)
+        return image , heatmap        
 
-    def _get_groundtruth(self, features):
+    def _get_groundtruth_in_yyxx(self, features):
         objects = features['objects']
         bbox = objects['bbox']      # yxyx形式
         ymin = tf.reshape(bbox[:,0], [-1, 1])
@@ -131,8 +142,12 @@ class Define_Inputs(object):
         ground_truth = tf.concat([ymin, ymax, xmin, xmax, classid], axis=1) # yyxx形式！
         return ground_truth
 
-    def def_inputs(self, image, ground_truth):
-        pass
+    def _def_inputs(self, image, ground_truth):
+        # tf.shape(image)[:2] == self._config['output_shape']
+        h, w = tf.shape(image)[0], tf.shape(image)[0] #self._config['output_shape']
+        heatmap =tf.zeros((h/4, w/4, self._num_classes),dtype=tf.dtypes.float32) # 这个4要参数化！TODO
+        assert ground_truth.shape[0] != 0 , "wrong"
+        return heatmap
 
 class Image_Normalizer:
     def __init__(self, dataset_name = 'voc/2017'):

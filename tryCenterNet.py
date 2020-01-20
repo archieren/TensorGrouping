@@ -57,7 +57,8 @@ def about_dataset_voc():
     from tensorgroup.models.dataset.voc import voc
     from tensorgroup.models.dataset import mode_keys as MK 
 
-    dataset = voc.VocInput(MK.TRAIN)
+    dataset = voc.VocInput(MK.TRAIN,batch_size = 2,num_exsamples=10)
+
     for image, gt in dataset(image_augmentor_config):
         #plt.imshow(image)
         #plt.show()

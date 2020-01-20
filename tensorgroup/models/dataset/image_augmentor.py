@@ -57,7 +57,7 @@ def image_augmentor(image
     image , ground_truth = flip(image, ground_truth,flip_prob)
     ground_truth =  filter_ground_truth(ground_truth)
     ground_truth =  yyxx_to_yxhw(ground_truth)
-    ground_truth =  pad_truth(ground_truth,pad_truth_to)
+    ground_truth =  pad_truth(ground_truth, pad_truth_to)
     return image, ground_truth
 
     
