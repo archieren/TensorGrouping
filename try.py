@@ -285,6 +285,28 @@ def example():
     modelB.fit(imagenet2012_train.batch(8),epochs=1)
 
 
+"""
+TOSEE: How to make a gaussian kernel
+import tensorflow as tf
+
+# Make Gaussian kernel following SciPy logic
+def make_gaussian_2d_kernel(sigma, truncate=4.0, dtype=tf.float32):
+    radius = tf.to_int32(sigma * truncate)
+    x = tf.cast(tf.range(-radius, radius + 1), dtype=dtype)
+    k = tf.exp(-0.5 * tf.square(x / sigma))
+    k = k / tf.reduce_sum(k)
+    return tf.expand_dims(k, 1) * k
+
+# Input data
+image = tf.placeholder(tf.float32, [16, 96, 96, 3])
+# Convolution kernel
+kernel = make_gaussian_2d_kernel(5)
+# Apply kernel to each channel (see https://stackoverflow.com/q/55687616/1782792)
+kernel = tf.tile(kernel[:, :, tf.newaxis, tf.newaxis], [1, 1, 3, 1])
+image_filtered = tf.nn.separable_conv2d(
+    image, kernel, tf.eye(3, batch_shape=[1, 1]),
+    strides=[1, 1, 1, 1], padding='SAME')
+"""
 if __name__ == '__main__':
     about_dataset_voc()
     #example()

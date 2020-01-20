@@ -55,16 +55,13 @@ image_augmentor_config = {
 
 def about_dataset_voc():
     from tensorgroup.models.dataset.voc import voc
-    train_voc, _ = tfds.load( name="voc/2012"
-                            , split="train"
-                            , with_info=True
-                            #, decoders={'image': tfds.decode.SkipDecoding(),}
-                            )
-    fun = voc.reform_voc_for_train(image_augmentor_config)
-    for image, gt in train_voc.map(fun).take(2):
-        plt.imshow(image)
-        plt.show()
-        print(gt)
+    from tensorgroup.models.dataset import mode_keys as MK 
+
+    dataset = voc.VocInput(MK.TRAIN)
+    for image, gt in dataset(image_augmentor_config):
+        #plt.imshow(image)
+        #plt.show()
+        print(gt.shape)
 
 
 if __name__ == '__main__':
