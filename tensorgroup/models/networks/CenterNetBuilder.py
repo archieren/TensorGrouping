@@ -1,11 +1,4 @@
 
-#from tensorflow. keras.applications.resnet50 import ResNet50
-#from keras.layers import Input, Conv2DTranspose, BatchNormalization, ReLU, Conv2D, Lambda, MaxPooling2D, Dropout
-#from keras.layers import ZeroPadding2D
-#from keras.models import Model
-#from keras.initializers import normal, constant, zeros
-#from keras.regularizers import l2
-#import keras.backend as K
 
 from __future__ import division
 
@@ -20,7 +13,9 @@ KB = keras.backend
 KU = keras.utils
 KR = keras.regularizers
 
-#from losses import loss
+# from losses import loss
+
+
 def focal_loss(hm_pred, hm_true):
     pos_mask = tf.cast(tf.equal(hm_true, 1), tf.float32)
     neg_mask = tf.cast(tf.less(hm_true, 1), tf.float32)
@@ -84,11 +79,11 @@ def topk(hm, max_objects=100):
     return scores, indices, class_ids, xs, ys
 
 
-def evaluate_batch_item(batch_item_detections, 
-                        num_classes, 
-                        max_objects_per_class=20, 
+def evaluate_batch_item(batch_item_detections,
+                        num_classes,
+                        max_objects_per_class=20,
                         max_objects=100,
-                        iou_threshold=0.5, 
+                        iou_threshold=0.5,
                         score_threshold=0.1):
     batch_item_detections = tf.boolean_mask(batch_item_detections,
                                             tf.greater(batch_item_detections[:, 4], score_threshold))
@@ -128,14 +123,14 @@ def evaluate_batch_item(batch_item_detections,
     return batch_item_detections
 
 
-def decode( hm
-            , wh
-            , reg
-            , max_objects=100
-            , nms=True
-            , flip_test=False
-            , num_classes=20
-            , score_threshold=0.1):
+def decode(hm,
+           wh,
+           reg,
+           max_objects=100,
+           nms=True,
+           flip_test=False,
+           num_classes=20,
+           score_threshold=0.1):
     if flip_test:
         hm = (hm[0:1] + hm[1:2, :, ::-1]) / 2
         wh = (wh[0:1] + wh[1:2, :, ::-1]) / 2
@@ -161,52 +156,39 @@ def decode( hm
     # (b, k, 6)
     detections = tf.concat([topk_x1, topk_y1, topk_x2, topk_y2, scores, class_ids], axis=-1)
     if nms:
-        detections = tf.map_fn(lambda x: evaluate_batch_item(x[0],num_classes=num_classes,score_threshold=score_threshold),
+        detections = tf.map_fn(lambda x: evaluate_batch_item(x[0], num_classes=num_classes, score_threshold=score_threshold),
                                elems=[detections],
                                dtype=tf.float32)
     return detections
 
+
 class CenterNetBuilder(object):
     @staticmethod
-    def CenterNetOnResNet50V2(num_classes
-                    #, backbone='resnet50'
-                    , input_size=512  # 512 == 32*16
-                    , max_objects=100
-                    , score_threshold=0.1
-                    , nms=True
-                    , flip_test=False):
-        #assert backbone in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
-        output_size     = input_size // 4
-        image_input     = KL.Input(shape=(input_size, input_size, 3))
-        hm_input        = KL.Input(shape=(output_size, output_size, num_classes))
-        wh_input        = KL.Input(shape=(max_objects, 2))
-        reg_input       = KL.Input(shape=(max_objects, 2))
-        reg_mask_input  = KL.Input(shape=(max_objects,))
-        index_input     = KL.Input(shape=(max_objects,))
+    def CenterNetOnResNet50V2(num_classes,  # backbone='resnet50'
+                              input_size=512,  # 512 == 32*16
+                              max_objects=100, score_threshold=0.1, nms=True, flip_test=False):
+        # assert backbone in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
+        output_size = input_size // 4
+        image_input = KL.Input(shape=(input_size, input_size, 3))
+        hm_input = KL.Input(shape=(output_size, output_size, num_classes))
+        wh_input = KL.Input(shape=(max_objects, 2))
+        reg_input = KL.Input(shape=(max_objects, 2))
+        reg_mask_input = KL.Input(shape=(max_objects,))
+        index_input = KL.Input(shape=(max_objects,))
 
-
-        
-        resnet = KA.ResNet50V2(weights='imagenet'
-                            , input_tensor=image_input #KL.Input(shape=(32*16, 32*16, 3) # 32*ResNetOutputSize = Inputsize
-                            , include_top=False)
-
+        resnet = KA.ResNet50V2(weights='imagenet',
+                               input_tensor=image_input,  # KL.Input(shape=(32*16, 32*16, 3) # 32*ResNetOutputSize = Inputsize
+                               include_top=False)
 
         # (b, 16, 16, 2048)
         C5 = resnet.output
-        #C5 = resnet.outputs[-1]
-
+        # C5 = resnet.outputs[-1]
 
         x = KL.Dropout(rate=0.5)(C5)
         # decoder
         num_filters = [256, 128, 64]
-        for nf in num_filters: # (2**len(num_filters))*ResNetOutputSize = CenterNetOutputSize
-            x = KL.Conv2DTranspose(nf
-                                , kernel_size=(4, 4)
-                                , strides=2
-                                , use_bias=False
-                                , padding='same'
-                                , kernel_initializer='he_normal'
-                                , kernel_regularizer=KR.l2(5e-4))(x)
+        for nf in num_filters:  # (2**len(num_filters))*ResNetOutputSize = CenterNetOutputSize
+            x = KL.Conv2DTranspose(nf, kernel_size=(4, 4), strides=2, use_bias=False, padding='same', kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(x)
             x = KL.BatchNormalization()(x)
             x = KL.ReLU()(x)
 
@@ -234,11 +216,11 @@ class CenterNetBuilder(object):
 
         # detections = decode(y1, y2, y3)
         detections = KL.Lambda(lambda x: decode(*x,
-                                            max_objects=max_objects,
-                                            score_threshold=score_threshold,
-                                            nms=nms,
-                                            flip_test=flip_test,
-                                            num_classes=num_classes))([y1, y2, y3])
+                                                max_objects=max_objects,
+                                                score_threshold=score_threshold,
+                                                nms=nms,
+                                                flip_test=flip_test,
+                                                num_classes=num_classes))([y1, y2, y3])
         prediction_model = KM.Model(inputs=image_input, outputs=detections)
         debug_model = KM.Model(inputs=image_input, outputs=[y1, y2, y3])
         return train_model, prediction_model, debug_model

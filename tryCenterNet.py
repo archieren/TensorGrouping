@@ -1,9 +1,9 @@
 import os
-import hashlib
+# import hashlib
 
-import multiprocessing
-import numpy as np
-import skimage.io as io
+# import multiprocessing
+# import numpy as np
+# import skimage.io as io
 
 from matplotlib import pyplot as plt
 
@@ -13,14 +13,14 @@ import tensorflow_datasets as tfds
 
 from tensorgroup.models.networks.ResnetKeypointBuilder import ResnetKeypointBuilder as RKB
 from tensorgroup.models.networks.BagnetBuilder import BagnetBuilder as BB
-from tensorgroup.models.networks.CenterNetBuilder import CenterNetBuilder as CNB 
+from tensorgroup.models.networks.CenterNetBuilder import CenterNetBuilder as CNB
 
 
 KA = tf.keras.applications
 KL = tf.keras.layers
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # or any {'0', '1', '2'}
-os.environ['TF_FORCE_GPU_ALLOW_GROWTH']='true'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # or any {'0', '1', '2'}
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 
 image_shape = (384, 384, 3)
@@ -39,8 +39,8 @@ config = {
     'keep_prob': 0.5,                                      # not used
     'batch_size': batch_size,
 
-    'score_threshold': 0.1,                                 
-    'top_k_results_output': 100,                           
+    'score_threshold': 0.1,
+    'top_k_results_output': 100,
 
 }
 
@@ -55,13 +55,13 @@ image_augmentor_config = {
 
 def about_dataset_voc():
     from tensorgroup.models.dataset.voc import voc
-    from tensorgroup.models.dataset import mode_keys as MK 
+    from tensorgroup.models.dataset import mode_keys as MK
 
-    dataset = voc.VocInput(MK.TRAIN,batch_size = 2,num_exsamples=10)
+    dataset = voc.VocInput(MK.TRAIN, batch_size=2, num_exsamples=10)
 
     for image, gt in dataset(image_augmentor_config):
-        #plt.imshow(image)
-        #plt.show()
+        plt.imshow(image[1])
+        plt.show()
         print(gt.shape)
 
 

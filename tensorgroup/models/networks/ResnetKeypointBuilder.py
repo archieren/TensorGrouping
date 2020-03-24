@@ -2,7 +2,7 @@ from __future__ import division
 
 
 import tensorflow as tf
-import numpy as np
+# import numpy as np
 # import tensorgroup.models.networks.ResnetBuilder as RES
 # 算了，还是直接从ResnetBuilder里考过来
 KL = tf.keras.layers
@@ -95,7 +95,7 @@ def _residual_block(block_function, filters, repetitions, is_first_layer=False):
     def f(input):
         for i in range(repetitions):
             init_strides = (1, 1)
-            if i == 0 and not is_first_layer: # 第一层残差块的第一层瓶颈层的init_strides仍为(1,1)
+            if i == 0 and not is_first_layer:  # 第一层残差块的第一层瓶颈层的init_strides仍为(1,1)
                 init_strides = (2, 2)
             input = block_function(filters=filters, init_strides=init_strides,
                                    is_first_block_of_first_layer=(is_first_layer and i == 0))(input)
@@ -154,7 +154,6 @@ def bottleneck(filters, init_strides=(1, 1), is_first_block_of_first_layer=False
     return f
 
 
-
 class ResnetKeypointBuilder(object):
     @staticmethod
     def build(input_shape, num_outputs, block_fn, repetitions):
@@ -192,7 +191,7 @@ class ResnetKeypointBuilder(object):
         return model
 
     @staticmethod
-    def make_deconv_layers(num_layers = 5,num_filters = [512, 256, 128, 64, 32]):
+    def make_deconv_layers(num_layers=5, num_filters=[512, 256, 128, 64, 32]):
         assert num_layers == len(num_filters), 'ERROR: num_deconv_layers is different len(num_deconv_filters)'
 
         def f(input):

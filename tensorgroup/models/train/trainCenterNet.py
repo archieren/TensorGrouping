@@ -1,6 +1,5 @@
 
 
-
 import tensorflow as tf
 import numpy as np
 import os
@@ -26,8 +25,8 @@ config = {
     'keep_prob': 0.5,                                      # not used
     'batch_size': batch_size,
 
-    'score_threshold': 0.1,                                 
-    'top_k_results_output': 100,                           
+    'score_threshold': 0.1,
+    'top_k_results_output': 100,
 
 
 }

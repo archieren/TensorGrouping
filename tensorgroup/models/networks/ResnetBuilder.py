@@ -93,7 +93,7 @@ def _residual_block(block_function, filters, repetitions, is_first_layer=False):
     def f(input):
         for i in range(repetitions):
             init_strides = (1, 1)
-            if i == 0 and not is_first_layer: # 第一层残差块的第一层瓶颈层的init_strides仍为(1,1)
+            if i == 0 and not is_first_layer:  # 第一层残差块的第一层瓶颈层的init_strides仍为(1,1)
                 init_strides = (2, 2)
             input = block_function(filters=filters, init_strides=init_strides,
                                    is_first_block_of_first_layer=(is_first_layer and i == 0))(input)
