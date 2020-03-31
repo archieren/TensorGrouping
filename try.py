@@ -215,16 +215,15 @@ def about_coco_api():
 
 
 def example():
-
     imagenet2012_train, _ = tfds.load(name="imagenet2012", split="train", with_info=True)
 
     # imagenet2012_train_pro = imagenet2012_train.map(d_scale)
 
-    for example in imagenet2012_train.take(10):
-        image = example['image']
-        print(repr(example))
-        plt.imshow(image)
-        plt.show()
+    # for example in imagenet2012_train.take(10):
+    #     image = example['image']
+    #     print(repr(example))
+    #     plt.imshow(image)
+    #     plt.show()
 
     def preprocess_image(record):
         image = record['image']
@@ -236,10 +235,9 @@ def example():
 
     imagenet2012_train = imagenet2012_train.map(preprocess_image)
     imagenet2012_train = imagenet2012_train.filter(lambda image, label: label != 10).take(1024)
-    print(imagenet2012_train)
-    for images, _ in imagenet2012_train.batch(32):
-        print(images.shape)
-
+    # print(imagenet2012_train)
+    # for images, _ in imagenet2012_train.batch(32):
+    #     print(images.shape)
     modelB = BB.build_bagnet_9(input_shape=(224, 224, 3))
     modelB.compile(optimizer=tf.keras.optimizers.RMSprop(0.001),
                    loss='sparse_categorical_crossentropy',
@@ -271,9 +269,11 @@ image_filtered = tf.nn.separable_conv2d(
 """
 if __name__ == '__main__':
     # about_dataset_voc()
-    # example()
+    example()
+    # about_model_BageNet()
+    # about_model_ResnetKeypoint()
     # about_keras_model_ResNet50V2()
-    about_keras_model_CenterNet("pred")
+    # about_keras_model_CenterNet("pred")
     # about_dataset_coco()
     # about_dataset_fashion_mnist()
     # about_coco_api()

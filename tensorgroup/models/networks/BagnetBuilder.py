@@ -161,7 +161,7 @@ class BagnetBuilder(object):
         """Builds a custom ResNet like architecture.
 
         Args:
-            input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols)
+            input_shape: The input shape in the form (nb_rows, nb_cols, nb_channels)
             num_outputs: The number of outputs at final softmax layer
             repetitions: Number of repetitions of various block units.
                 At each block unit, the number of filters are doubled and the input size is halved
@@ -171,7 +171,7 @@ class BagnetBuilder(object):
         """
         block_fn = bottleneck
         if len(input_shape) != 3:
-            raise Exception("Input shape should be a tuple (nb_channels, nb_rows, nb_cols)")
+            raise Exception("Input shape should be a tuple (nb_rows, nb_cols, nb_channels)")
         assert len(repetitions) == len(k3), 'ERROR: len(repetitions) is different len(k3)'
         assert len(repetitions) == len(strides), 'ERROR: len(repetitions) is different len(strides)'
 
