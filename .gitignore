@@ -1,6 +1,8 @@
 work/
 data/
+data_voc/
 TAGS
+\#*\#
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod~]

@@ -8,9 +8,17 @@ import numpy as np
 import warnings
 import math
 import sys
-from tensorgroup.models.dataset.voc.voc import voc_classes
 from tensorgroup.models.dataset import image_augmentor
-# from utils.image_augmentor import image_augmentor
+
+"""
+为提高效率，先将目录文件式的数据转换成tfrecord格式的数据。
+"""
+
+voc_classes = {
+    'single_white': 0,
+    'double_red': 1,
+    'word': 2
+}
 
 
 def int64_feature(values):
@@ -64,17 +72,12 @@ def xml_to_example(xmlpath, imgpath):
     return example
 
 
-def dataset2tfrecord(xml_dir, img_dir, output_dir, name, total_shards=5):
-    if not tf.io.gfile.Exists(output_dir):
-        tf.io.gfile.MakeDirs(output_dir)
-        print(output_dir, 'does not exist, create it done')
-    else:
-        if len(tf.io.gfile.ListDirectory(output_dir)) == 0:
-            print(output_dir, 'already exist, need not create new')
-        else:
-            warnings.warn(output_dir + ' is not empty!', UserWarning)
+def dataset2tfrecord(xml_dir, img_dir, output_dir, name, total_shards=2):
+    if tf.io.gfile.exists(output_dir):
+        tf.io.gfile.rmtree(output_dir)
+    tf.io.gfile.mkdir(output_dir)
     outputfiles = []
-    xmllist = tf.io.gfile.Glob(os.path.join(xml_dir, '*.xml'))
+    xmllist = tf.io.gfile.glob(os.path.join(xml_dir, '*.xml'))
     num_per_shard = int(math.ceil(len(xmllist)) / float(total_shards))
     for shard_id in range(total_shards):
         outputname = '%s_%05d-of-%05d.tfrecord' % (name, shard_id+1, total_shards)

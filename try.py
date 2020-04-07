@@ -109,8 +109,8 @@ def about_dataset_voc():
     })
     """
 
-    _, info_voc = tfds.load(name="voc/2007",
-                            with_info=True)
+    train_voc, info_voc = tfds.load(name="voc/2007",
+                                    with_info=True)
 
     """
     FeaturesDict({
@@ -234,7 +234,7 @@ def example():
         return image, label
 
     imagenet2012_train = imagenet2012_train.map(preprocess_image)
-    imagenet2012_train = imagenet2012_train.filter(lambda image, label: label != 10).take(1024)
+    imagenet2012_train = imagenet2012_train.filter(lambda image, label: label != 10).take(8192)
     # print(imagenet2012_train)
     # for images, _ in imagenet2012_train.batch(32):
     #     print(images.shape)

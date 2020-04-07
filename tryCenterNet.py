@@ -8,13 +8,8 @@ import os
 from matplotlib import pyplot as plt
 
 import tensorflow as tf
-import tensorflow_datasets as tfds
-
-
-from tensorgroup.models.networks.ResnetKeypointBuilder import ResnetKeypointBuilder as RKB
-from tensorgroup.models.networks.BagnetBuilder import BagnetBuilder as BB
-from tensorgroup.models.networks.CenterNetBuilder import CenterNetBuilder as CNB
-
+from lxml import etree
+from tensorgroup.models.dataset.voc import voc_custom
 
 KA = tf.keras.applications
 KL = tf.keras.layers
@@ -64,6 +59,18 @@ def about_dataset_voc():
         plt.show()
         print(gt.shape)
 
+def repair_data(ann_dir):
+    xmllist = tf.io.gfile.glob(os.path.join(ann_dir, '*.xml'))
+    for xmlpath in xmllist:
+        xml = etree.parse(xmlpath)
+        root = xml.getroot()
+        image_name = root.find('filename')
+        path = root.find('path')
+        path.text = image_name.text
+        xml.write(xmlpath)
+
 
 if __name__ == '__main__':
-    about_dataset_voc()
+    # about_dataset_voc()
+    # repair_data("./data_voc/Annotations/")
+    voc_custom.dataset2tfrecord("./data_voc/Annotations", "./data_voc/Annotations", "./data_voc/tf_records", "light")

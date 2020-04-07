@@ -78,6 +78,9 @@ def _get_voc_dataset(split='train'):
                 'pose': ClassLabel(shape=(), dtype=tf.int64, num_classes=5),
         }),
     })
+
+    Args:
+         split:指定用那个库
     """
     dataset, _ = tfds.load(name="voc/2012", split=split, with_info=True
                            # , decoders={'image': tfds.decode.SkipDecoding(),}
