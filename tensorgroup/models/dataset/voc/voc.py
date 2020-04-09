@@ -166,8 +166,8 @@ class ImageNormalizer:
     """
     """
 
-    def __init__(self, dataset_name='voc/2017'):
-        if dataset_name != 'voc/2017':
+    def __init__(self, dataset_name='voc/2012'):
+        if dataset_name != 'voc/2012':
             raise ValueError('TODO')
         self._dataset_name = dataset_name
         self._offset = (0.485, 0.456, 0.406)

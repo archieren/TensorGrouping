@@ -4,7 +4,7 @@ import tensorflow as tf
 
 def image_augmentor(image, ground_truth,
                     data_format='channels_last',
-                    output_shape=[384, 384],
+                    output_shape=[512, 512],
                     flip_prob=[0., 0.5],
                     fill_mode='BILINEAR',
                     color_jitter_prob=0.5,

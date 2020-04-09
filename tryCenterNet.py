@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 
 import tensorflow as tf
 from lxml import etree
-from tensorgroup.models.dataset.voc import voc_custom
+from tensorgroup.models.dataset import mode_keys as ModeKey
 
 KA = tf.keras.applications
 KL = tf.keras.layers
@@ -41,23 +41,34 @@ config = {
 
 image_augmentor_config = {
     'data_format': 'channels_last',
-    'output_shape': [384, 384],
+    'output_shape': [512, 512],                           # Must match the network's input_shape!
     'flip_prob': [0., 0.5],
     'fill_mode': 'BILINEAR',
     'color_jitter_prob': 0.5,
-    'pad_truth_to': 60,
+    'pad_truth_to': 100,                                   # Must match the maximal objects!
 }
 
 def about_dataset_voc():
     from tensorgroup.models.dataset.voc import voc
     from tensorgroup.models.dataset import mode_keys as MK
 
-    dataset = voc.VocInput(MK.TRAIN, batch_size=2, num_exsamples=10)
+    dataset = voc.VocInput(MK.TRAIN, batch_size=2, num_exsamples=4)
 
     for image, gt in dataset(image_augmentor_config):
         plt.imshow(image[1])
         plt.show()
         print(gt.shape)
+
+def about_dataset_voc_custom():
+    from tensorgroup.models.dataset.voc import voc_custom
+    ann_dir, img_dir, tfr_dir = "./data_voc/Annotations", "./data_voc/Annotations", "./data_voc/tf_records"
+    voc_custom.dataset2tfrecord(ann_dir, img_dir, tfr_dir, ModeKey.TRAIN)
+    dataset = voc_custom.VocCustomInput(tfr_dir, batch_size=2, num_exsamples=4, repeat_num=1, buffer_size=10000)
+
+    for image, gt in dataset(image_augmentor_config):
+        plt.imshow(image[1])
+        plt.show()
+        print(gt.numpy)
 
 def repair_data(ann_dir):
     xmllist = tf.io.gfile.glob(os.path.join(ann_dir, '*.xml'))
@@ -73,4 +84,5 @@ def repair_data(ann_dir):
 if __name__ == '__main__':
     # about_dataset_voc()
     # repair_data("./data_voc/Annotations/")
-    voc_custom.dataset2tfrecord("./data_voc/Annotations", "./data_voc/Annotations", "./data_voc/tf_records", "light")
+    tf.executing_eagerly()
+    about_dataset_voc_custom()
