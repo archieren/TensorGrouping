@@ -60,11 +60,16 @@ def xml_to_example(xmlpath, imgpath):
         obj = xpath[i]
         classid = voc_custom_classes[obj.find('name').text]
         bndbox = obj.find('bndbox')
-        ymin = float(bndbox.find('ymin').text)
-        ymax = float(bndbox.find('ymax').text)
-        xmin = float(bndbox.find('xmin').text)
-        xmax = float(bndbox.find('xmax').text)
-        ground_truth[i, :] = np.asarray([ymin/height, ymax/height, xmin/width, xmax/width, classid],
+        ymin = int(bndbox.find('ymin').text)
+        ymax = int(bndbox.find('ymax').text)
+        xmin = int(bndbox.find('xmin').text)
+        xmax = int(bndbox.find('xmax').text)
+        # Normalized the objects cordinations
+        ground_truth[i, :] = np.asarray([ymin/height,
+                                         ymax/height,
+                                         xmin/width,
+                                         xmax/width,
+                                         classid],
                                         np.float32)
     features = {
         'image': bytes_feature(image),
@@ -101,33 +106,6 @@ def dataset2tfrecord(xml_dir, img_dir, output_dir, name, total_shards=2):
     return outputfiles
 
 
-def parse_function(data, config):
-    features = tf.parse_single_example(data, features={
-        'image': tf.FixedLenFeature([], tf.string),
-        'shape': tf.FixedLenFeature([], tf.string),
-        'ground_truth': tf.FixedLenFeature([], tf.string)
-    })
-    shape = tf.decode_raw(features['shape'], tf.int32)
-    ground_truth = tf.decode_raw(features['ground_truth'], tf.float32)
-    shape = tf.reshape(shape, [3])
-    ground_truth = tf.reshape(ground_truth, [-1, 5])
-    images = tf.image.decode_jpeg(features['image'], channels=3)
-    images = tf.reshape(images, shape)
-    images, ground_truth = image_augmentor(image=images,
-                                           input_shape=shape,
-                                           ground_truth=ground_truth,
-                                           **config
-                                           )
-    return images, ground_truth
-
-
-def get_generator(tfrecords, batch_size, buffer_size, image_preprocess_config):
-    data = tf.data.TFRecordDataset(tfrecords)
-    data = data.map(lambda x: parse_function(x, image_preprocess_config)).shuffle(buffer_size=buffer_size).batch(batch_size, drop_remainder=True).repeat()
-    iterator = tf.data.Iterator.from_structure(data.output_types, data.output_shapes)
-    init_op = iterator.make_initializer(data)
-    return init_op, iterator
-
 class VocCustomInput:
     """
     定义Voc类训练库的什么呢？
@@ -139,7 +117,8 @@ class VocCustomInput:
                  batch_size: Optional[int] = -1,
                  num_exsamples: Optional[int] = -1,
                  repeat_num: Optional[int] = -1,
-                 buffer_size: Optional[int] = -1):
+                 buffer_size: Optional[int] = -1,
+                 max_objects: Optional[int] = 100):
         assert mode is not None
         self._tfrecords_dir = tfrecords_dir
         self._mode = mode
@@ -149,15 +128,17 @@ class VocCustomInput:
         self._buffer_size = buffer_size
         #
         self._num_classes = len(voc_custom_classes)
+        self._max_objects = max_objects
 
     def __call__(self, image_augmentor_config):
         tfrecords = tf.io.gfile.glob(os.path.join(self._tfrecords_dir, TFR_PATTERN.format(self._mode)))
         print(tfrecords)
         dataset = tf.data.TFRecordDataset(tfrecords)
+        decoder = Decoder(ImageNormalizer())
         inputs_def = DefineInputs(image_augmentor_config,
                                   num_classes=self._num_classes,
-                                  image_normalizer=ImageNormalizer())
-        dataset = dataset.map(inputs_def)  # 定义输入的内容、格式！ dataset = (image, heatmap)
+                                  max_objects=self._max_objects)
+        dataset = dataset.map(decoder).map(inputs_def)  # 定义输入的内容、格式！ dataset = (image, heatmap)
         if self._num_examples > 0:
             dataset = dataset.take(self._num_examples)
         if self._repeat_num > 0:
@@ -169,37 +150,11 @@ class VocCustomInput:
 
         return dataset
 
-class DefineInputs:
-    """
-    """
-
-    def __init__(self, config, num_classes, image_normalizer):
-        """ 指定网络需要的输入格式。
-        Args:
-            config:
-              {'data_format': 'channels_last',
-               'output_shape': [512, 512],                           # Must match the network's input_shape!
-               'flip_prob': [0., 0.5],
-               'fill_mode': 'BILINEAR',
-               'color_jitter_prob': 0.5,
-               'pad_truth_to': 100,                                   # Must match the maximal objects!
-              }
-            num_classes:
-            image_normalizer:
-        """
-        self._config = config
+class Decoder:
+    def __init__(self, image_normalizer):
         self._image_normalizer = image_normalizer
-        self._num_classes = num_classes
 
     def __call__(self, tfrecord):
-        """将features转换成模型需要的形式
-        Args:
-            tfrecord: one record .
-        Returns:
-            images:
-            ground_truth:
-
-        """
         features = tf.io.parse_single_example(tfrecord, features={
             'image': tf.io.FixedLenFeature([], tf.string),
             'shape': tf.io.FixedLenFeature([], tf.string),
@@ -211,33 +166,224 @@ class DefineInputs:
         ground_truth = tf.reshape(ground_truth, [-1, 5])
         image = tf.image.decode_jpeg(features['image'], channels=3)
         image = tf.reshape(image, shape)
-        image = self._image_normalizer(image)
+        if self._image_normalizer is not None:
+            image = self._image_normalizer(image)
+        return image, ground_truth
+
+class DefineInputs:
+    """
+    """
+
+    def __init__(self, config, num_classes, max_objects):
+        """ 指定网络需要的输入格式。
+        Args:
+            config:
+              {'data_format': 'channels_last',
+               'network_input_shape': [512, 512],                           # Must match the network's input_shape!
+               'flip_prob': [0., 0.5],
+               'fill_mode': 'BILINEAR',
+               'color_jitter_prob': 0.5,
+               'pad_truth_to': 100,                                   # Must match the maximal objects!
+              }
+            num_classes:
+        """
+        self._config = config
+        self._num_classes = num_classes
+        self._max_objects = max_objects
+
+    def __call__(self, image, ground_truth):
+        """将features转换成模型需要的形式
+        Args:
+            image: Normalized image.
+            ground_truth: Normalized Ground truth!
+        Returns:
+            images:
+            center_keypoint_heatmap:
+            center_offset:
+            regression_shape:
+
+        """
+
         image, ground_truth = image_augmentor(image=image,
                                               ground_truth=ground_truth,
                                               **self._config
                                               )
         # ground_truth: [y_center, x_center, height, width, classid]
 
-        # heatmap = self._def_inputs(image, ground_truth)
-        # return image, heatmap
-        return image, ground_truth
+        heatmap = self._def_inputs(image, ground_truth)
+        return image, heatmap
+        # return image, ground_truth
 
     def _def_inputs(self, image, ground_truth):
-        h, w = self._config['output_shape']
-        heatmap = tf.zeros((h/4, w/4, self._num_classes), dtype=tf.dtypes.float32)
-        assert ground_truth.shape[0] != 0, "wrong"
-        return heatmap
+        """生成网络所需要的输入。
+        Args:
+            image: 已经调整成了self._config['network_input_shape']
+            ground_truth: y_x_h_w_class格式，且归一化了, no_padding。
+        Results:
+            center_keypoint_heatmap
+            center_offset_reg
+            center_shape_reg
+        """
+        center_keypoint_heatmap = self._gen_center_keypoint_heatmap(ground_truth)
+        return center_keypoint_heatmap
 
+    def _gen_center_keypoint_heatmap(self, ground_truth):
+        # objects_num = tf.shape(ground_truth)[0]
+        # center_keypoint_index = tf.zeros((self._max_objects), tf.dtypes.int64)
+        # network_input_shape = self._config['network_input_shape']
+        # (i_h, i_w) = network_input_shape
+        # (f_h, f_w) = (int(i_h/4), int(i_w/4))
+        # network_featuremap_shape = (f_h, f_w, self._num_classes)
+        # center_keypoint_heatmap = tf.zeros(network_featuremap_shape, dtype=tf.float32)
+        # center_offset_reg = tf.zeros((self._max_objects, 2), dtype=tf.float32)
+        # center_keypoint_index = tf.zeros((self._max_objects), dtype=tf.int64)
+
+        # print(objects_num)
+
+        # for k in range(objects_num):
+        #     (y, x, h, w, class_id) = ground_truth[k]     # Nomalized coordinates!
+        #     (y, x, h, w) = (y*f_h, x*f_w, h*f_h, w*f_w)  # featuremap中的坐标
+        #     (y_int, x_int, h_int, w_int) = int((y, x, h, w)+0.5)  # featuremap中的离散坐标
+        #     (y_off, x_off, h_off, w_off) = (y, x, h, w) - (y_int, x_int, h_int, w_int)  # 离散坐标和原始坐标的偏差
+        #     center_offset_reg[k] = [y_off, x_off]
+        #     center_keypoint_index[k] = y_int*f_w+x_int
+
+        #     radius = gaussian_radius((h_int, w_int))
+        #     radius = max(0, int(radius))
+        #     draw_gaussian(center_keypoint_heatmap, layer=int(class_id), center=[y_int, x_int], sigma=radius)
+
+        #     pass
+        # return center_keypoint_heatmap
+
+        network_input_shape = self._config['network_input_shape']
+        (i_h, i_w) = network_input_shape
+        (f_h, f_w) = (int(i_h/4), int(i_w/4))
+        network_featuremap_shape = (f_h, f_w, self._num_classes)
+
+        objects_num = tf.argmin(ground_truth, axis=0)
+        tf.print(objects_num)
+        objects_num = objects_num[0]
+        tf.print(objects_num)
+        ground_truth = tf.gather(ground_truth, tf.range(0, objects_num, dtype=tf.int32))
+
+        # objects_num = tf.shape(ground_truth)[0]
+        y = ground_truth[..., 0] * f_h
+        x = ground_truth[..., 1] * f_w
+        h = ground_truth[..., 2] * f_h
+        w = ground_truth[..., 3] * f_w
+        class_id = tf.cast(ground_truth[..., 4], dtype=tf.int32)
+        center = tf.concat([tf.expand_dims(y, axis=-1), tf.expand_dims(x, axis=-1)], axis=-1)
+        center_round = tf.floor(center+0.5)
+        center_offset_reg = center - center_round
+        center_round = tf.cast(center_round, dtype=tf.int32)
+
+        center_keypoint_heatmap = np.zeros(network_featuremap_shape, dtype=float)
+        return tf.shape(center_offset_reg)
+
+    def _gen_center_offset_reg(self, ground_truth):
+        pass
+
+    def _gen_shape_reg(self, gound_truth):
+        pass
+
+def gaussian2D(shape, sigma=1):
+    m, n = [(ss - 1.) / 2. for ss in shape]
+    y, x = np.ogrid[-m:m+1, -n:n+1]
+
+    h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
+    h[h < np.finfo(h.dtype).eps * h.max()] = 0
+    return h
+
+def gaussian2D_tf(shape, sigma=1):
+    m, n = shape[0], shape[1]
+    m = tf.cast((m-1.)/2, dtype=tf.float32)
+    n = tf.cast((n-1.)/2, dtype=tf.float32)
+
+    y = tf.range(-m, m+1, dtype=tf.float32)
+    x = tf.range(-n, n+1, dtype=tf.float32)
+    [n_x, m_y] = tf.meshgrid(x, y)
+
+    h = tf.exp(-(x * x + y * y) / (2 * sigma * sigma))
+    # h[h < np.finfo(h.dtype).eps * h.max()] = 0
+    return h
+
+def gaussian_radius_tf(det_size, min_overlap=0.7):
+    height, width = det_size
+
+    a1 = 1
+    b1 = (height + width)
+    c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
+    sq1 = tf.sqrt(b1 ** 2 - 4 * a1 * c1)
+    r1 = (b1 + sq1) / 2
+
+    a2 = 4
+    b2 = 2 * (height + width)
+    c2 = (1 - min_overlap) * width * height
+    sq2 = tf.sqrt(b2 ** 2 - 4 * a2 * c2)
+    r2 = (b2 + sq2) / 2
+
+    a3 = 4 * min_overlap
+    b3 = -2 * min_overlap * (height + width)
+    c3 = (min_overlap - 1) * width * height
+    sq3 = tf.sqrt(b3 ** 2 - 4 * a3 * c3)
+    r3 = (b3 + sq3) / 2
+    return tf.reduce_min([r1, r2, r3])
+
+def gaussian_radius(det_size, min_overlap=0.7):
+    height, width = det_size
+
+    a1 = 1
+    b1 = (height + width)
+    c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
+    sq1 = np.sqrt(b1 ** 2 - 4 * a1 * c1)
+    r1 = (b1 + sq1) / 2
+
+    a2 = 4
+    b2 = 2 * (height + width)
+    c2 = (1 - min_overlap) * width * height
+    sq2 = np.sqrt(b2 ** 2 - 4 * a2 * c2)
+    r2 = (b2 + sq2) / 2
+
+    a3 = 4 * min_overlap
+    b3 = -2 * min_overlap * (height + width)
+    c3 = (min_overlap - 1) * width * height
+    sq3 = np.sqrt(b3 ** 2 - 4 * a3 * c3)
+    r3 = (b3 + sq3) / 2
+    return min(r1, r2, r3)
+
+def draw_gaussian(heatmap, layer, center, sigma):
+    # 目标热图只采用 Gaussian类型
+    (HEAT_MAP_HEIGHT, HEAT_MAP_WIDTH) = heatmap.shape[0:2]
+    temperature_size = sigma * 3
+    TOP, BOTTOM = LEFT, RIGHT = Y_, X_ = 0, 1  # 纯粹为了可读
+    mu_y = int(center[0]+0.5)  # 调整到HeatMap的坐标系，四舍五入.
+    mu_x = int(center[1]+0.5)
+    # 检查Gaussian_bounds是否落在HEATMAP之外,直接跳出运行,不支持不可见JOINT POINT
+    left_top = [int(mu_y - temperature_size), int(mu_x - temperature_size)]
+    right_bottom = [int(mu_y + temperature_size), int(mu_x + temperature_size)]
+    if left_top[Y_] >= HEAT_MAP_HEIGHT or left_top[X_] >= HEAT_MAP_WIDTH or right_bottom[Y_] < 0 or right_bottom[X_] < 0:
+        assert False
+
+    # 生成Gaussian_Area
+    size = temperature_size*2+1
+    g = gaussian2D([size, size], sigma)
+    # 确定可用Gaussian_Area
+    g_y = max(0, -left_top[Y_]), min(right_bottom[Y_], HEAT_MAP_HEIGHT) - left_top[Y_]
+    g_x = max(0, -left_top[X_]), min(right_bottom[X_], HEAT_MAP_WIDTH) - left_top[X_]
+    #
+    heatmap_y = max(0, left_top[Y_]), min(right_bottom[Y_], HEAT_MAP_HEIGHT)
+    heatmap_x = max(0, left_top[X_]), min(right_bottom[X_], HEAT_MAP_WIDTH)
+
+    heatmap[heatmap_y[TOP]:heatmap_y[BOTTOM], heatmap_x[LEFT]:heatmap_x[RIGHT], layer] = g[g_y[TOP]:g_y[BOTTOM], g_x[LEFT]:g_x[RIGHT]]
+    pass
 
 class ImageNormalizer:
     """
+    每一类数据应当有不同的，应当自行去统计自己的训练数据!
+    但这里暂时还是用voc的数据集里的东西！
     """
 
     def __init__(self):
-        """
-        每一类数据应当有不同的，应当自行去统计自己的训练数据!
-        但这里暂时还是用voc的数据集里的东西！
-        """
         self._offset = (0.485, 0.456, 0.406)
         self._scale = (0.229, 0.224, 0.225)
 

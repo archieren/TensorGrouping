@@ -4,7 +4,7 @@ import tensorflow as tf
 
 def image_augmentor(image, ground_truth,
                     data_format='channels_last',
-                    output_shape=[512, 512],
+                    network_input_shape=[512, 512],
                     flip_prob=[0., 0.5],
                     fill_mode='BILINEAR',
                     color_jitter_prob=0.5,
@@ -14,13 +14,13 @@ def image_augmentor(image, ground_truth,
         :param image: HWC
         :param ground_truth: [ymin, ymax, xmin, xmax, classid]     # Normalized !!!
         :param data_format: 'channels_first', 'channels_last'
-        :param output_shape: [h, w]
+        :param network_input_shape: [h, w]
         :param flip_prob: [flip_top_down_prob, flip_left_right_prob]
         :param fill_mode: NEAREST_NEIGHBOR', 'BILINEAR', 'BICUBIC'
         :param color_jitter_prob: prob of color_jitter
         :param pad_truth_to: pad ground_truth to size [pad_truth_to, 5] with -1
     Rerurns:
-        :return image: output_shape
+        :return image: network_input_shape
         :return ground_truth: [pad_truth_to, 5] [ycenter, xcenter, h, w, class_id]
 
     """
@@ -38,7 +38,7 @@ def image_augmentor(image, ground_truth,
             raise Exception("flip_prob can't less than 0.0, and can't grater than 1.0")
 
     # image = tf.image.convert_image_dtype(image,tf.float32)
-    output_h, output_w = output_shape
+    output_h, output_w = network_input_shape
 
     fill_mode_project = {
         'NEAREST_NEIGHBOR': tf.image.ResizeMethod.NEAREST_NEIGHBOR,

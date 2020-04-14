@@ -142,14 +142,16 @@ class DefineInputs:
         return image, heatmap
 
     def _def_inputs(self, image, ground_truth):
-        # tf.shape(image)[:2] == self._config['output_shape']
-        h, w = tf.shape(image)[0], tf.shape(image)[0]  # self._config['output_shape']
+        assert image.shape[0:2] == self._config['network_input_shape'], "Shape error"
+        h, w = self._config['network_input_shape']
         heatmap = tf.zeros((h/4, w/4, self._num_classes), dtype=tf.dtypes.float32)  # 这个4要参数化！TODO
-        assert ground_truth.shape[0] != 0, "wrong"
         return heatmap
 
 
 def _get_groundtruth_in_yyxx(features):
+    """
+    VOC的数据集中，xy_坐标均归一化了的。
+    """
     objects = features['objects']
     bbox = objects['bbox']      # yxyx形式
     ymin = tf.reshape(bbox[:, 0], [-1, 1])
