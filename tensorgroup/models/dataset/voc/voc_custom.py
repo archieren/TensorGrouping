@@ -258,27 +258,40 @@ class DefineInputs:
         network_input_shape = self._config['network_input_shape']
         (i_h, i_w) = network_input_shape
         (f_h, f_w) = (int(i_h/4), int(i_w/4))
-        network_featuremap_shape = (f_h, f_w, self._num_classes)
 
         objects_num = tf.argmin(ground_truth, axis=0)
-        tf.print(objects_num)
         objects_num = objects_num[0]
-        tf.print(objects_num)
         ground_truth = tf.gather(ground_truth, tf.range(0, objects_num, dtype=tf.int32))
 
-        # objects_num = tf.shape(ground_truth)[0]
-        y = ground_truth[..., 0] * f_h
-        x = ground_truth[..., 1] * f_w
-        h = ground_truth[..., 2] * f_h
-        w = ground_truth[..., 3] * f_w
+        # ground_truth的shape应为(objects_num, 5)
+        c_y = ground_truth[..., 0] * f_h
+        c_x = ground_truth[..., 1] * f_w
+        c_h = ground_truth[..., 2] * f_h
+        c_w = ground_truth[..., 3] * f_w
         class_id = tf.cast(ground_truth[..., 4], dtype=tf.int32)
-        center = tf.concat([tf.expand_dims(y, axis=-1), tf.expand_dims(x, axis=-1)], axis=-1)
-        center_round = tf.floor(center+0.5)
-        center_offset_reg = center - center_round
+
+        center = tf.concat([tf.expand_dims(c_y, axis=-1), tf.expand_dims(c_x, axis=-1)], axis=-1)
+        c_y = tf.floor(c_y)
+        c_x = tf.floor(c_x)
+        center_round = tf.floor(center)
+        # center_offset_reg = center - center_round
         center_round = tf.cast(center_round, dtype=tf.int32)
 
-        center_keypoint_heatmap = np.zeros(network_featuremap_shape, dtype=float)
-        return tf.shape(center_offset_reg)
+        center_keypoint_heatmap = gaussian2D_tf_at_any_point(objects_num, c_y, c_x, c_h, c_w, f_h, f_w)
+        zero_like_heatmap = tf.expand_dims(tf.zeros([f_h, f_w], dtype=tf.float32), axis=-1)
+        all_class_heatmap = []
+        for i in range(self._num_classes):
+            is_class_i = tf.equal(class_id, i)
+            class_i_heatmap = tf.boolean_mask(center_keypoint_heatmap, is_class_i, axis=0)
+            class_i_heatmap = tf.cond(
+                tf.equal(tf.shape(class_i_heatmap)[0], 0),
+                lambda: zero_like_heatmap,
+                lambda: tf.expand_dims(tf.reduce_max(class_i_heatmap, axis=0), axis=-1)
+            )
+            all_class_heatmap.append(class_i_heatmap)
+        center_keypoint_heatmap = tf.concat(all_class_heatmap, axis=-1)
+
+        return center_keypoint_heatmap
 
     def _gen_center_offset_reg(self, ground_truth):
         pass
@@ -286,8 +299,24 @@ class DefineInputs:
     def _gen_shape_reg(self, gound_truth):
         pass
 
+def gaussian2D_tf_at_any_point(c_num, c_y, c_x, c_h, c_w, f_h, f_w):
+    sigma = gaussian_radius_tf(c_h, c_w)
+    c_y = tf.reshape(c_y, [-1, 1, 1])
+    c_x = tf.reshape(c_x, [-1, 1, 1])
+
+    y_range = tf.range(0, f_h, dtype=tf.float32)
+    x_range = tf.range(0, f_w, dtype=tf.float32)
+    [mesh_x, mesh_y] = tf.meshgrid(x_range, y_range)
+    mesh_x = tf.expand_dims(mesh_x, 0)
+    mesh_x = tf.tile(mesh_x, [c_num, 1, 1])
+    mesh_y = tf.expand_dims(mesh_y, 0)
+    mesh_y = tf.tile(mesh_y, [c_num, 1, 1])
+    center_keypoint_heatmap = tf.exp(-((c_y-mesh_y)**2+(c_x-mesh_x)**2)/(2*sigma**2))
+    return center_keypoint_heatmap
+
 def gaussian2D(shape, sigma=1):
-    m, n = [(ss - 1.) / 2. for ss in shape]
+    # m, n = [(ss - 1.) / 2. for ss in shape]
+    m, n = (shape[0]-1.)/2, (shape[1]-1.)/2
     y, x = np.ogrid[-m:m+1, -n:n+1]
 
     h = np.exp(-(x * x + y * y) / (2 * sigma * sigma))
@@ -307,9 +336,13 @@ def gaussian2D_tf(shape, sigma=1):
     # h[h < np.finfo(h.dtype).eps * h.max()] = 0
     return h
 
-def gaussian_radius_tf(det_size, min_overlap=0.7):
-    height, width = det_size
-
+def gaussian_radius_tf(height, width, min_overlap=0.7):
+    """
+    Args:
+        height, width: Both are the tensor of the same shape (N,)!
+    Results:
+        radius: 考虑所有框的大小，而得到的最佳半径
+    """
     a1 = 1
     b1 = (height + width)
     c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
@@ -329,8 +362,11 @@ def gaussian_radius_tf(det_size, min_overlap=0.7):
     r3 = (b3 + sq3) / 2
     return tf.reduce_min([r1, r2, r3])
 
-def gaussian_radius(det_size, min_overlap=0.7):
-    height, width = det_size
+def gaussian_radius(height, width, min_overlap=0.7):
+    """
+    Args:
+        height, width: Both are the array of the same shape (N,)!
+    """
 
     a1 = 1
     b1 = (height + width)
@@ -349,7 +385,7 @@ def gaussian_radius(det_size, min_overlap=0.7):
     c3 = (min_overlap - 1) * width * height
     sq3 = np.sqrt(b3 ** 2 - 4 * a3 * c3)
     r3 = (b3 + sq3) / 2
-    return min(r1, r2, r3)
+    return np.min([r1, r2, r3])
 
 def draw_gaussian(heatmap, layer, center, sigma):
     # 目标热图只采用 Gaussian类型
