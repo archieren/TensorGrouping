@@ -280,6 +280,7 @@ class DefineInputs:
         center_keypoint_heatmap = gaussian2D_tf_at_any_point(objects_num, c_y, c_x, c_h, c_w, f_h, f_w)
         zero_like_heatmap = tf.expand_dims(tf.zeros([f_h, f_w], dtype=tf.float32), axis=-1)
         all_class_heatmap = []
+        all_class_mask = []
         for i in range(self._num_classes):
             is_class_i = tf.equal(class_id, i)
             class_i_heatmap = tf.boolean_mask(center_keypoint_heatmap, is_class_i, axis=0)
@@ -289,9 +290,18 @@ class DefineInputs:
                 lambda: tf.expand_dims(tf.reduce_max(class_i_heatmap, axis=0), axis=-1)
             )
             all_class_heatmap.append(class_i_heatmap)
-        center_keypoint_heatmap = tf.concat(all_class_heatmap, axis=-1)
 
-        return center_keypoint_heatmap
+            class_i_center = tf.boolean_mask(center_round, is_class_i, axis=0)
+            class_i_mask = tf.cond(
+                tf.equal(tf.shape(class_i_center)[0], 0),
+                lambda: zero_like_heatmap,
+                lambda: tf.expand_dims(tf.sparse.to_dense(tf.spatse.Spartensor(class_i_center, tf.ones_like(class_i_center[..., 0], tf.float32), dense_shape=[f_h, f_w]), validate_indices=False), axis=-1)
+            )
+            all_class_mask.append(class_i_mask)
+        center_keypoint_heatmap = tf.concat(all_class_heatmap, axis=-1)
+        center_keypoint_mask = tf.concat(all_class_mask, axis=-1)
+
+        return center_keypoint_heatmap, center_keypoint_mask
 
     def _gen_center_offset_reg(self, ground_truth):
         pass
