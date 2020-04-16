@@ -73,10 +73,12 @@ def about_dataset_voc_custom():
     tfr_dir = "./data_voc/tf_records"
     dataset = voc_custom.VocCustomInput(tfr_dir, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
 
-    for image, heatmap in dataset(image_augmentor_config):
+    for image, heatmap, mask in dataset(image_augmentor_config):
         # plt.imshow(image[1])
         # plt.show()
         print(tf.shape(heatmap))
+        print(tf.shape(mask))
+        print("\n")
 
 def repair_data(ann_dir):
     xmllist = tf.io.gfile.glob(os.path.join(ann_dir, '*.xml'))
