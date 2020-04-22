@@ -210,54 +210,30 @@ class DefineInputs:
                                               )
         # ground_truth: [y_center, x_center, height, width, classid]
 
-        heatmap, mask = self._def_inputs(image, ground_truth)
-        return image, heatmap, mask
+        center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
+        return image, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask
         # return image, ground_truth
 
     def _def_inputs(self, image, ground_truth):
         """生成网络所需要的输入。
         Args:
             image: 已经调整成了self._config['network_input_shape']
-            ground_truth: y_x_h_w_class格式，且归一化了, no_padding。
+            ground_truth: y_x_h_w_class格式，且归一化了, with_padding。
         Results:
-            center_keypoint_heatmap
-            center_offset_reg
-            center_shape_reg
+               center_round: [max_objects,2]
+               center_offset: [max_objects,2]
+               shape_offset:  [max_objects,2]
+               center_keypoint_heatmap: [num_classes, feature_map_height, feature_map_width]
+               center_keypoint_mask: [num_classes, feature_map_height, feature_map_width]
         """
-        center_keypoint_heatmap = self._gen_center_keypoint_heatmap(ground_truth)
-        return center_keypoint_heatmap
+        center_keypoint_heatmap, center_keypoint_mask = self._gen_center_keypoint_heatmap(ground_truth)
+        center_round, center_offset, shape_offset = self._gen_center_round_and_center_offset_and_shape_offset(ground_truth)
+        return center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask
 
     def _gen_center_keypoint_heatmap(self, ground_truth):
-        # objects_num = tf.shape(ground_truth)[0]
-        # center_keypoint_index = tf.zeros((self._max_objects), tf.dtypes.int64)
-        # network_input_shape = self._config['network_input_shape']
-        # (i_h, i_w) = network_input_shape
-        # (f_h, f_w) = (int(i_h/4), int(i_w/4))
-        # network_featuremap_shape = (f_h, f_w, self._num_classes)
-        # center_keypoint_heatmap = tf.zeros(network_featuremap_shape, dtype=tf.float32)
-        # center_offset_reg = tf.zeros((self._max_objects, 2), dtype=tf.float32)
-        # center_keypoint_index = tf.zeros((self._max_objects), dtype=tf.int64)
-
-        # print(objects_num)
-
-        # for k in range(objects_num):
-        #     (y, x, h, w, class_id) = ground_truth[k]     # Nomalized coordinates!
-        #     (y, x, h, w) = (y*f_h, x*f_w, h*f_h, w*f_w)  # featuremap中的坐标
-        #     (y_int, x_int, h_int, w_int) = int((y, x, h, w)+0.5)  # featuremap中的离散坐标
-        #     (y_off, x_off, h_off, w_off) = (y, x, h, w) - (y_int, x_int, h_int, w_int)  # 离散坐标和原始坐标的偏差
-        #     center_offset_reg[k] = [y_off, x_off]
-        #     center_keypoint_index[k] = y_int*f_w+x_int
-
-        #     radius = gaussian_radius((h_int, w_int))
-        #     radius = max(0, int(radius))
-        #     draw_gaussian(center_keypoint_heatmap, layer=int(class_id), center=[y_int, x_int], sigma=radius)
-
-        #     pass
-        # return center_keypoint_heatmap
-
         network_input_shape = self._config['network_input_shape']
         (i_h, i_w) = network_input_shape
-        (f_h, f_w) = (int(i_h/4), int(i_w/4))
+        (f_h, f_w) = (int(i_h/4), int(i_w/4))  # 注意这个4的来源
 
         objects_num = tf.argmin(ground_truth, axis=0)
         objects_num = objects_num[0]
@@ -274,8 +250,7 @@ class DefineInputs:
         c_y = tf.floor(c_y)
         c_x = tf.floor(c_x)
         center_round = tf.floor(center)
-        # center_offset_reg = center - center_round
-        center_round = tf.cast(center_round, dtype=tf.int64)
+        center_round = tf.cast(center_round, dtype=tf.int64)  # tf.int64 是必需的！
 
         center_keypoint_heatmap = gaussian2D_tf_at_any_point(objects_num, c_y, c_x, c_h, c_w, f_h, f_w)
         zero_like_heatmap = tf.expand_dims(tf.zeros([f_h, f_w], dtype=tf.float32), axis=-1)
@@ -304,11 +279,26 @@ class DefineInputs:
 
         return center_keypoint_heatmap, center_keypoint_mask
 
-    def _gen_center_offset_reg(self, ground_truth):
-        pass
+    def _gen_center_round_and_center_offset_and_shape_offset(self, ground_truth):
+        network_input_shape = self._config['network_input_shape']
+        (i_h, i_w) = network_input_shape
+        (f_h, f_w) = (int(i_h/4), int(i_w/4))
 
-    def _gen_shape_reg(self, gound_truth):
-        pass
+        c_y = ground_truth[..., 0] * f_h
+        c_x = ground_truth[..., 1] * f_w
+        c_h = ground_truth[..., 2] * f_h
+        c_w = ground_truth[..., 3] * f_w
+
+        center = tf.concat([tf.expand_dims(c_y, axis=-1), tf.expand_dims(c_x, axis=-1)], axis=-1)
+        center_round = tf.floor(center)
+        center_offset = center - center_round
+        center_round = tf.cast(center_round, dtype=tf.int64)
+
+        shape = tf.concat([tf.expand_dims(c_h, axis=-1), tf.expand_dims(c_w, axis=-1)], axis=-1)
+        shape_round = tf.floor(shape)
+        shape_offset = shape - shape_round
+
+        return center_round, center_offset, shape_offset
 
 def gaussian2D_tf_at_any_point(c_num, c_y, c_x, c_h, c_w, f_h, f_w):
     sigma = gaussian_radius_tf(c_h, c_w)
