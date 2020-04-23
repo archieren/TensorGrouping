@@ -53,10 +53,11 @@ centernet_input_config = {
 }
 
 def about_dataset_voc():
+    from tensorgroup.models.dataset.centernet_inputs import DefineInputs
     from tensorgroup.models.dataset.voc import voc
     from tensorgroup.models.dataset import mode_keys as MK
-
-    dataset = voc.VocInput(MK.TRAIN, batch_size=2, num_exsamples=4)
+    inputs_definer = DefineInputs
+    dataset = voc.VocInput(inputs_definer=inputs_definer, mode=MK.TRAIN, batch_size=2, num_exsamples=4)
 
     for image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(centernet_input_config):
         # plt.imshow(image[1])
@@ -74,9 +75,11 @@ def make_voc_custom_dataset():
     voc_custom.dataset2tfrecord(ann_dir, img_dir, tfr_dir, ModeKey.TRAIN)
 
 def about_dataset_voc_custom():
+    from tensorgroup.models.dataset.centernet_inputs import DefineInputs
     from tensorgroup.models.dataset.voc import voc_custom
     tfr_dir = "./data_voc/tf_records"
-    dataset = voc_custom.VocCustomInput(tfr_dir, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
+    inputs_definer = DefineInputs
+    dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
 
     for image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(centernet_input_config):
         # plt.imshow(image[1])
@@ -203,6 +206,9 @@ def test_gengaussian():
         all.append(heatmap)
     heatmap = tf.concat(all, axis=-1)
     print(heatmap[201, 201, :])
+
+def train():
+    pass
 
 
 if __name__ == '__main__':

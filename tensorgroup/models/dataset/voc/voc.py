@@ -36,6 +36,7 @@ class VocInput:
     """
 
     def __init__(self,
+                 inputs_definer=DefineInputs,
                  mode: Text = ModeKey.TRAIN,     # 还未用！但有用的！
                  batch_size: Optional[int] = -1,
                  num_exsamples: Optional[int] = -1,
@@ -51,6 +52,7 @@ class VocInput:
         #
         self._num_classes = len(voc_classes)
         self._max_objects = max_objects
+        self._inputs_definer = inputs_definer
 
     def __call__(self, network_input_config):
         dataset = _get_voc_dataset(split=self._mode)
@@ -59,9 +61,9 @@ class VocInput:
     def __gen_input__(self, dataset, network_input_config):
         decoder = self.Decoder(self.ImageNormalizer())
         # 定义所期望的输入格式！ dataset = (normailized_and_resized_image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask)
-        inputs_def = DefineInputs(network_input_config,
-                                  num_classes=self._num_classes,
-                                  max_objects=self._max_objects)
+        inputs_def = self._inputs_definer(network_input_config,
+                                          num_classes=self._num_classes,
+                                          max_objects=self._max_objects)
         dataset = dataset.map(decoder).map(inputs_def)
         if self._num_examples > 0:
             dataset = dataset.take(self._num_examples)
