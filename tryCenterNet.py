@@ -43,7 +43,7 @@ config = {
 
 }
 
-image_augmentor_config = {
+centernet_input_config = {
     'data_format': 'channels_last',
     'network_input_shape': [512, 512],                           # Must match the network's input_shape!
     'flip_prob': [0., 0.5],
@@ -58,10 +58,15 @@ def about_dataset_voc():
 
     dataset = voc.VocInput(MK.TRAIN, batch_size=2, num_exsamples=4)
 
-    for image, gt in dataset(image_augmentor_config):
-        plt.imshow(image[1])
-        plt.show()
-        print(gt.numpy)
+    for image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(centernet_input_config):
+        # plt.imshow(image[1])
+        # plt.show()
+        print(tf.shape(image))
+        print(tf.shape(center_keypoint_heatmap))
+        print(tf.shape(center_keypoint_mask))
+        print(tf.shape(ground_truth))
+        print(tf.shape(center_round))
+        print("\n")
 
 def make_voc_custom_dataset():
     from tensorgroup.models.dataset.voc import voc_custom
@@ -73,11 +78,12 @@ def about_dataset_voc_custom():
     tfr_dir = "./data_voc/tf_records"
     dataset = voc_custom.VocCustomInput(tfr_dir, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
 
-    for image, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(image_augmentor_config):
+    for image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(centernet_input_config):
         # plt.imshow(image[1])
         # plt.show()
         print(tf.shape(center_keypoint_heatmap))
         print(tf.shape(center_keypoint_mask))
+        print(tf.shape(ground_truth))
         print(tf.shape(center_round))
         print("\n")
 
@@ -200,7 +206,7 @@ def test_gengaussian():
 
 
 if __name__ == '__main__':
-    # about_dataset_voc()
+    about_dataset_voc()
     # repair_data("./data_voc/Annotations/")
     # tf.executing_eagerly()
     # make_voc_custom_dataset()
