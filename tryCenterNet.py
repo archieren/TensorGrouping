@@ -14,6 +14,7 @@ from tensorgroup.models.dataset import mode_keys as ModeKey
 
 KA = tf.keras.applications
 KL = tf.keras.layers
+KO = tf.keras.optimizers
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # or any {'0', '1', '2'}
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
@@ -81,13 +82,13 @@ def about_dataset_voc_custom():
     inputs_definer = DefineInputs
     dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
 
-    for image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(centernet_input_config):
+    for image, indices, indices_mask, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(centernet_input_config):
         # plt.imshow(image[1])
         # plt.show()
         print(tf.shape(center_keypoint_heatmap))
         print(tf.shape(center_keypoint_mask))
-        print(tf.shape(ground_truth))
-        print(tf.shape(center_round))
+        print(tf.shape(indices))
+        print(tf.shape(indices_mask))
         print("\n")
 
 def repair_data(ann_dir):
@@ -115,108 +116,30 @@ def test_gather():
     # print(tf.gather_nd(a, b, batch_dims=1))
     print(tf.gather_nd(a, b, batch_dims=0))
 
-def test_meshgrid():
-    # 和np.ogrid似乎对应
-    m, n = 4, 3
-    y = tf.range(-m, m+1, dtype=tf.float32)
-    x = tf.range(-n, n+1, dtype=tf.float32)
-    [n_x, m_y] = tf.meshgrid(x, y)
-    print(n_x)
-    print(m_y)
-    h = gaussian2D_tf(np.array([9, 7]))
-    print(h)
-
-def gaussian2D_tf(shape, sigma=1):
-    m, n = shape[0], shape[1]
-    m = tf.cast((m-1.)/2, dtype=tf.float32)
-    n = tf.cast((n-1.)/2, dtype=tf.float32)
-    # m, n = shape[0], shape[1]
-    # m, n = (m - 1.0)/2, (n - 1.0)/2
-    y = tf.range(-m, m+1, dtype=tf.float32)
-    x = tf.range(-n, n+1, dtype=tf.float32)
-    [n_x, m_y] = tf.meshgrid(x, y)
-
-    h = tf.exp(-(n_x * n_x + m_y * m_y) / (2 * sigma * sigma))
-    # h[h < np.finfo(h.dtype).eps * h.max()] = 0
-    return h
-
-def gaussian_radius_tf(height, width, min_overlap=0.7):
-    """
-    Args:
-        height, width: Both are the tensor of the same shape (N,)!
-    Results:
-        radius: 考虑所有框的大小，而得到的最佳半径
-    """
-    a1 = 1
-    b1 = (height + width)
-    c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
-    sq1 = tf.sqrt(b1 ** 2 - 4 * a1 * c1)
-    r1 = (b1 + sq1) / 2
-
-    a2 = 4
-    b2 = 2 * (height + width)
-    c2 = (1 - min_overlap) * width * height
-    sq2 = tf.sqrt(b2 ** 2 - 4 * a2 * c2)
-    r2 = (b2 + sq2) / 2
-
-    a3 = 4 * min_overlap
-    b3 = -2 * min_overlap * (height + width)
-    c3 = (min_overlap - 1) * width * height
-    sq3 = tf.sqrt(b3 ** 2 - 4 * a3 * c3)
-    r3 = (b3 + sq3) / 2
-    return tf.reduce_min([r1, r2, r3])
-
-def test_gengaussian():
-    # 这是值得读的一段代码
-    # 在不同位置生成Gaussian 分布
-    pshape = np.array([256, 256])
-    # 下面三者，0维的大小对应
-    center = tf.cast(np.array([[100, 100], [200, 200]]), dtype=tf.int64)
-    h = tf.cast(np.array([13., 11.]), dtype=tf.float32)
-    w = tf.cast(np.array([17., 9.]), dtype=tf.float32)
-
-    sigma = gaussian_radius_tf(h, w, 0.7)
-
-    c_y = tf.cast(center[:, 0], dtype=tf.float32)
-    c_x = tf.cast(center[:, 1], dtype=tf.float32)
-    # 注意下面的一步，其用意在于后面c_y-mesh_y之类的运算
-    c_y = tf.reshape(c_y, [-1, 1, 1])
-    c_x = tf.reshape(c_x, [-1, 1, 1])
-    # 中心的个数
-    num_g = tf.shape(center)[0]
-
-    y_range = tf.range(0, pshape[0], dtype=tf.float32)
-    x_range = tf.range(0, pshape[1], dtype=tf.float32)
-    [mesh_x, mesh_y] = tf.meshgrid(x_range, y_range)
-    mesh_x = tf.expand_dims(mesh_x, 0)
-    mesh_x = tf.tile(mesh_x, [num_g, 1, 1])
-    mesh_y = tf.expand_dims(mesh_y, 0)
-    mesh_y = tf.tile(mesh_y, [num_g, 1, 1])
-    heatmap = tf.exp(-((c_y-mesh_y)**2+(c_x-mesh_x)**2)/(2*sigma**2))
-
-    # 合成
-    heatmap = tf.reduce_max(heatmap, axis=0)
-    print(heatmap[center[0, 0], center[0, 1]])
-    print(heatmap[center[1, 0], center[1, 1]])
-    print(heatmap[101, 101])
-
-    heatmap = tf.expand_dims(heatmap, axis=-1)
-    all = []
-    for i in range(5):
-        all.append(heatmap)
-    heatmap = tf.concat(all, axis=-1)
-    print(heatmap[201, 201, :])
-
 def train():
-    pass
+    from tensorgroup.models.dataset.centernet_inputs import DefineInputs
+    from tensorgroup.models.dataset.voc import voc_custom
+    from tensorgroup.models.networks import CenterNetBuilder as CNB
+    tfr_dir = "./data_voc/tf_records"
+    inputs_definer = DefineInputs
+    dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
+    train_model, _, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes))
+    train_model.summary()
+
+    def center_loss(y_true, y_pred):
+        return y_pred
+
+    train_model.compile(optimizer=KO.Adam(lr=1e-3), loss={'centernet_loss': center_loss})
+    # train_model.fit(dataset)
 
 
 if __name__ == '__main__':
-    about_dataset_voc()
+    # about_dataset_voc()
     # repair_data("./data_voc/Annotations/")
     # tf.executing_eagerly()
     # make_voc_custom_dataset()
-    about_dataset_voc_custom()
+    # about_dataset_voc_custom()
     # test_gather()
     # test_meshgrid()
     # test_gengaussian()
+    train()

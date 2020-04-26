@@ -52,7 +52,7 @@ def about_keras_model_ResNet50V2():
 
 def about_keras_model_InceptionResNetV2():
     modelC = KA.InceptionResNetV2(weights='imagenet',
-                                  input_tensor=KL.Input(shape=(299, 299, 3)),  # 32*output_shape+43 = input_shape
+                                  input_tensor=KL.Input(shape=(32*8+43, 32*8+43, 3)),  # 32*output_shape+43 = input_shape
                                   include_top=False)
     modelC.summary()
 
@@ -61,7 +61,7 @@ def about_keras_model_InceptionResNetV2():
 # print( multiprocessing.cpu_count())
 
 def about_keras_model_CenterNet(which="train"):
-    train_model, prediction_model, debug_model = CNB.CenterNetOnResNet50V2(1000)
+    train_model, prediction_model, debug_model = CNB.CenterNetOnResNet50V2(10, input_size=2048)
     if which == "train":
         train_model.summary()
     elif which == "pred":
@@ -269,11 +269,12 @@ image_filtered = tf.nn.separable_conv2d(
 """
 if __name__ == '__main__':
     # about_dataset_voc()
-    example()
+    # example()
     # about_model_BageNet()
     # about_model_ResnetKeypoint()
-    # about_keras_model_ResNet50V2()
+    about_keras_model_ResNet50V2()
     # about_keras_model_CenterNet("pred")
+    # about_keras_model_InceptionResNetV2()
     # about_dataset_coco()
     # about_dataset_fashion_mnist()
     # about_coco_api()

@@ -17,7 +17,13 @@ KR = keras.regularizers
 
 
 def focal_loss(ck_hm_pred, ck_hm_true, ck_hm_mask):
-    pos_mask = ck_hm_mask
+    """
+    Args: All with shape [B, Feature_Map_Shape, Num_Of_Classes]
+       - ck_hm_pred: Predicated centerkeypoint heatmap.
+       - ck_hm_true: Groundtruth of centerkeypoint heatmap
+       - ck_hm_mask: Groundtruth of centerkeypoint center
+    """
+    pos_mask = tf.cast(ck_hm_mask, tf.float32)
     neg_mask = tf.cast(1-pos_mask, tf.float32)
     neg_weights = tf.pow(1 - ck_hm_true, 4)
 
@@ -32,24 +38,26 @@ def focal_loss(ck_hm_pred, ck_hm_true, ck_hm_mask):
     return cls_loss
 
 
-def reg_l1_loss(y_pred, y_true, indices, mask):
-    b = tf.shape(y_pred)[0]
-    k = tf.shape(indices)[1]
-    c = tf.shape(y_pred)[-1]
-    y_pred = tf.reshape(y_pred, (b, -1, c))
-    indices = tf.cast(indices, tf.int32)
-    y_pred = tf.gather(y_pred, indices, batch_dims=1)
-    mask = tf.tile(tf.expand_dims(mask, axis=-1), (1, 1, 2))
-    total_loss = tf.reduce_sum(tf.abs(y_true * mask - y_pred * mask))
-    reg_loss = total_loss / (tf.reduce_sum(mask) + 1e-4)
+def reg_l1_loss(y_pred, y_true, indices, indices_mask):
+    """
+    Args:
+       - y_pred: With shape [B, Feature_Map_Shape, 2]
+       - y_true: With shape [B, N, 2]
+       - indices: With shape [B, N, 2]
+       - indices_mask: With shape [B, N, 1]
+    """
+    y_pred = tf.gather_nd(y_pred, indices, batch_dims=1)
+    indices_mask = tf.tile(indices_mask, (1, 1, 2))
+    total_loss = tf.reduce_sum(tf.abs(y_true * indices_mask - y_pred * indices_mask))
+    reg_loss = total_loss / (tf.reduce_sum(indices_mask) + 1e-4)
     return reg_loss
 
-
+# [y1, y2, y3, ck_hm_input, ck_mask_input, shape_input, center_offset_input, indices_input, indices_mask_input
 def loss(args):
-    ck_hm_pred, wh_pred, reg_pred, ck_hm_true, wh_true, reg_true, reg_mask, indices = args
-    hm_loss = focal_loss(ck_hm_pred, ck_hm_true)
-    wh_loss = 0.1 * reg_l1_loss(wh_pred, wh_true, indices, reg_mask)
-    reg_loss = reg_l1_loss(reg_pred, reg_true, indices, reg_mask)
+    ck_hm_pred, shape_pred, center_offset_pred, ck_hm_true, ck_hm_mask, shape_true, center_offset_true, indices, indices_mask = args
+    hm_loss = focal_loss(ck_hm_pred, ck_hm_true, ck_hm_mask)
+    wh_loss = reg_l1_loss(shape_pred, shape_true, indices, indices_mask)*0.1
+    reg_loss = reg_l1_loss(center_offset_pred, center_offset_true, indices, indices_mask)
     total_loss = hm_loss + wh_loss + reg_loss
     return total_loss
 
@@ -170,11 +178,12 @@ class CenterNetBuilder(object):
         # assert backbone in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
         output_size = input_size // 4
         image_input = KL.Input(shape=(input_size, input_size, 3))
-        hm_input = KL.Input(shape=(output_size, output_size, num_classes))
-        wh_input = KL.Input(shape=(max_objects, 2))
-        reg_input = KL.Input(shape=(max_objects, 2))
-        reg_mask_input = KL.Input(shape=(max_objects,))
-        index_input = KL.Input(shape=(max_objects,))
+        ck_hm_input = KL.Input(shape=(output_size, output_size, num_classes))
+        ck_mask_input = KL.Input(shape=(output_size, output_size, num_classes))
+        shape_input = KL.Input(shape=(max_objects, 2))
+        center_offset_input = KL.Input(shape=(max_objects, 2))
+        indices_input = KL.Input(shape=(max_objects, 2), dtype=tf.int64)
+        indices_mask_input = KL.Input(shape=(max_objects, 1))
 
         resnet = KA.ResNet50V2(weights='imagenet',
                                input_tensor=image_input,  # KL.Input(shape=(32*16, 32*16, 3) # 32*ResNetOutputSize = Inputsize
@@ -198,21 +207,20 @@ class CenterNetBuilder(object):
         y1 = KL.ReLU()(y1)
         y1 = KL.Conv2D(num_classes, 1, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4), activation='sigmoid')(y1)
 
-        # wh header
+        # wh header -- shape
         y2 = KL.Conv2D(64, 3, padding='same', use_bias=False, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(x)
         y2 = KL.BatchNormalization()(y2)
         y2 = KL.ReLU()(y2)
         y2 = KL.Conv2D(2, 1, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(y2)
 
-        # reg header
+        # reg header -- center_offset
         y3 = KL.Conv2D(64, 3, padding='same', use_bias=False, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(x)
         y3 = KL.BatchNormalization()(y3)
         y3 = KL.ReLU()(y3)
         y3 = KL.Conv2D(2, 1, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(y3)
 
-        loss_ = KL.Lambda(loss, name='centernet_loss')(
-            [y1, y2, y3, hm_input, wh_input, reg_input, reg_mask_input, index_input])
-        train_model = KM.Model(inputs=[image_input, hm_input, wh_input, reg_input, reg_mask_input, index_input], outputs=[loss_])
+        loss_ = KL.Lambda(loss, name='centernet_loss')([y1, y2, y3, ck_hm_input, ck_mask_input, shape_input, center_offset_input, indices_input, indices_mask_input])
+        train_model = KM.Model(inputs=[image_input, indices_input, indices_mask_input, center_offset_input, shape_input, ck_hm_input, ck_mask_input], outputs=[loss_])
 
         # detections = decode(y1, y2, y3)
         detections = KL.Lambda(lambda x: decode(*x,

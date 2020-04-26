@@ -161,15 +161,15 @@ class ResnetKeypointBuilder(object):
             See paper "Simple Baselines for Human Pose Estimation and Tracking"
 
         Args:
-            input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols)
-            num_outputs: The number of outputs at final softmax layer
-            block_fn: The block function to use. This is either `basic_block` or `bottleneck`.
+            - input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols)
+            - num_outputs: The number of outputs at final softmax layer
+            - block_fn: The block function to use. This is either `basic_block` or `bottleneck`.
                 The original paper used basic_block for layers < 50
-            repetitions: Number of repetitions of various block units.
+            - repetitions: Number of repetitions of various block units.
                 At each block unit, the number of filters are doubled and the input size is halved
 
         Returns:
-            The keras ResnetKeypoint `Model`.
+            - The keras ResnetKeypoint `Model`.
         """
         if len(input_shape) != 3:
             raise Exception("Input shape should be a tuple (nb_channels, nb_rows, nb_cols)")

@@ -44,8 +44,8 @@ class DefineInputs:
                                               )
         # ground_truth: [y_center, x_center, height, width, classid]
 
-        center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
-        return image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask
+        indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
+        return image, indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask
         # return image, ground_truth
 
     def _def_inputs(self, image, ground_truth):
@@ -61,8 +61,8 @@ class DefineInputs:
                center_keypoint_mask: [num_classes, feature_map_height, feature_map_width]
         """
         center_keypoint_heatmap, center_keypoint_mask = self._gen_center_keypoint_heatmap(ground_truth)
-        center_round, center_offset, shape_offset = self._gen_center_round_and_center_offset_and_shape_offset(ground_truth)
-        return center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask
+        indices, indices_mask, center_offset, shape = self._gen_center_round_and_center_offset_and_shape_offset(ground_truth)
+        return indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask
 
     def _gen_center_keypoint_heatmap(self, ground_truth):
         network_input_shape = self._config['network_input_shape']
@@ -126,13 +126,16 @@ class DefineInputs:
         center = tf.concat([tf.expand_dims(c_y, axis=-1), tf.expand_dims(c_x, axis=-1)], axis=-1)
         center_round = tf.floor(center)
         center_offset = center - center_round
-        center_round = tf.cast(center_round, dtype=tf.int64)
+        center_round = tf.cast(center_round, dtype=tf.int64)  # tf.int64 是必需的！
+        indices = center_round
 
         shape = tf.concat([tf.expand_dims(c_h, axis=-1), tf.expand_dims(c_w, axis=-1)], axis=-1)
-        shape_round = tf.floor(shape)
-        shape_offset = shape - shape_round
+        # shape_round = tf.floor(shape)
+        # shape_offset = shape - shape_round
 
-        return center_round, center_offset, shape_offset
+        indices_mask = tf.cast(tf.greater(tf.expand_dims(c_h, axis=-1), 0.0), dtype=tf.float32) * tf.cast(tf.greater(tf.expand_dims(c_w, axis=-1), 0.0), dtype=tf.float32)
+
+        return indices, indices_mask, center_offset, shape
 
 def gaussian2D_tf_at_any_point(c_num, c_y, c_x, c_h, c_w, f_h, f_w):
     sigma = gaussian_radius_tf(c_h, c_w)
