@@ -60,14 +60,10 @@ def about_dataset_voc():
     inputs_definer = DefineInputs
     dataset = voc.VocInput(inputs_definer=inputs_definer, mode=MK.TRAIN, batch_size=2, num_exsamples=4)
 
-    for image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(centernet_input_config):
-        # plt.imshow(image[1])
-        # plt.show()
-        print(tf.shape(image))
-        print(tf.shape(center_keypoint_heatmap))
-        print(tf.shape(center_keypoint_mask))
-        print(tf.shape(ground_truth))
-        print(tf.shape(center_round))
+    for inputs in dataset(centernet_input_config):
+        plt.imshow(inputs['image'][0])
+        plt.show()
+        print(inputs['indices'])
         print("\n")
 
 def make_voc_custom_dataset():
@@ -81,15 +77,24 @@ def about_dataset_voc_custom():
     tfr_dir = "./data_voc/tf_records"
     inputs_definer = DefineInputs
     dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
+    # dataset 来的输入如下:（参见centernet_inputs.py）
+    # {'image': image,
+    #  'indices': indices,
+    #  'indices_mask': indices_mask,
+    #  'center_offset': center_offset,
+    #  'shape': shape,
+    #  'center_keypoint_heatmap': center_keypoint_heatmap,
+    #  'center_keypoint_mask': center_keypoint_mask}
 
-    for image, indices, indices_mask, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask in dataset(centernet_input_config):
-        # plt.imshow(image[1])
-        # plt.show()
-        print(tf.shape(center_keypoint_heatmap))
-        print(tf.shape(center_keypoint_mask))
-        print(tf.shape(indices))
-        print(tf.shape(indices_mask))
-        print("\n")
+    for inputs, targets in dataset(centernet_input_config):
+        print(tf.shape(inputs['image']))
+        print(tf.shape(inputs['indices']))
+        print(tf.shape(inputs['indices_mask']))
+        print(tf.shape(inputs['center_offset']))
+        print(tf.shape(inputs['shape']))
+        print(tf.shape(inputs['center_keypoint_heatmap']))
+        print(tf.shape(inputs['center_keypoint_mask']))
+        print(tf.shape(targets['loss_as_output']))
 
 def repair_data(ann_dir):
     xmllist = tf.io.gfile.glob(os.path.join(ann_dir, '*.xml'))
@@ -101,36 +106,21 @@ def repair_data(ann_dir):
         path.text = image_name.text
         xml.write(xmlpath)
 
-def test_gather():
-    # 琢磨一下 tf.gather_nd
-    a = np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
-    print("a shape is {}".format(a.shape))
-    # b = np.array([[[0, 1]], [[2, 3]]])
-    b = np.array([[0], [0], [3], [3]])
-    print("b shape is {}".format(b.shape))
-    print(tf.gather_nd(a, b, batch_dims=1))
-    print(tf.gather_nd(a, b, batch_dims=0))
-    print("-------------------------------")
-    b = np.array([[0, 1], [2, 3]])
-    print("b shape is {}".format(b.shape))
-    # print(tf.gather_nd(a, b, batch_dims=1))
-    print(tf.gather_nd(a, b, batch_dims=0))
-
 def train():
     from tensorgroup.models.dataset.centernet_inputs import DefineInputs
     from tensorgroup.models.dataset.voc import voc_custom
     from tensorgroup.models.networks import CenterNetBuilder as CNB
     tfr_dir = "./data_voc/tf_records"
     inputs_definer = DefineInputs
-    dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
+    dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=2, buffer_size=10000)
     train_model, _, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes))
     train_model.summary()
 
     def center_loss(y_true, y_pred):
         return y_pred
 
-    train_model.compile(optimizer=KO.Adam(lr=1e-3), loss={'centernet_loss': center_loss})
-    # train_model.fit(dataset)
+    train_model.compile(optimizer=KO.Adam(lr=1e-3), loss={'loss_as_output': center_loss})
+    train_model.fit(dataset(centernet_input_config), epochs=100)
 
 
 if __name__ == '__main__':

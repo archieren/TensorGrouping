@@ -45,8 +45,15 @@ class DefineInputs:
         # ground_truth: [y_center, x_center, height, width, classid]
 
         indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
-        return image, indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask
-        # return image, ground_truth
+        # 在这个地方，有必要给些注释：DataSet + Dictionary
+        return ({'image': image,
+                 'indices': indices,
+                 'indices_mask': indices_mask,
+                 'center_offset': center_offset,
+                 'shape': shape,
+                 'center_keypoint_heatmap': center_keypoint_heatmap,
+                 'center_keypoint_mask': center_keypoint_mask},
+                {'loss_as_output': tf.constant([1.0])})
 
     def _def_inputs(self, image, ground_truth):
         """生成网络所需要的输入。
@@ -126,14 +133,17 @@ class DefineInputs:
         center = tf.concat([tf.expand_dims(c_y, axis=-1), tf.expand_dims(c_x, axis=-1)], axis=-1)
         center_round = tf.floor(center)
         center_offset = center - center_round
-        center_round = tf.cast(center_round, dtype=tf.int64)  # tf.int64 是必需的！
-        indices = center_round
+        # center_round = tf.cast(center_round, dtype=tf.int64)  # tf.int64 是必需的！
+        # indices = center_round
 
         shape = tf.concat([tf.expand_dims(c_h, axis=-1), tf.expand_dims(c_w, axis=-1)], axis=-1)
         # shape_round = tf.floor(shape)
         # shape_offset = shape - shape_round
 
         indices_mask = tf.cast(tf.greater(tf.expand_dims(c_h, axis=-1), 0.0), dtype=tf.float32) * tf.cast(tf.greater(tf.expand_dims(c_w, axis=-1), 0.0), dtype=tf.float32)
+        t_mask = tf.tile(indices_mask, (1, 2))
+        indices = center_round * t_mask
+        indices = tf.cast(indices, dtype=tf.int64)
 
         return indices, indices_mask, center_offset, shape
 

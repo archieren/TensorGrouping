@@ -52,14 +52,13 @@ def reg_l1_loss(y_pred, y_true, indices, indices_mask):
     reg_loss = total_loss / (tf.reduce_sum(indices_mask) + 1e-4)
     return reg_loss
 
-# [y1, y2, y3, ck_hm_input, ck_mask_input, shape_input, center_offset_input, indices_input, indices_mask_input
 def loss(args):
     ck_hm_pred, shape_pred, center_offset_pred, ck_hm_true, ck_hm_mask, shape_true, center_offset_true, indices, indices_mask = args
     hm_loss = focal_loss(ck_hm_pred, ck_hm_true, ck_hm_mask)
     wh_loss = reg_l1_loss(shape_pred, shape_true, indices, indices_mask)*0.1
     reg_loss = reg_l1_loss(center_offset_pred, center_offset_true, indices, indices_mask)
     total_loss = hm_loss + wh_loss + reg_loss
-    return total_loss
+    return tf.expand_dims(total_loss, axis=-1)
 
 
 def nms(heat, kernel=3):
@@ -176,14 +175,22 @@ class CenterNetBuilder(object):
                               input_size=512,  # 512 == 32*16
                               max_objects=100, score_threshold=0.1, nms=True, flip_test=False):
         # assert backbone in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
+        # dataset 来的输入如下:（参见centernet_inputs.py）
+        #        {'image': image,
+        #         'indices': indices,
+        #         'indices_mask': indices_mask,
+        #         'center_offset': center_offset,
+        #         'shape': shape,
+        #         'center_keypoint_heatmap': center_keypoint_heatmap,
+        #         'center_keypoint_mask': center_keypoint_mask}
         output_size = input_size // 4
-        image_input = KL.Input(shape=(input_size, input_size, 3))
-        ck_hm_input = KL.Input(shape=(output_size, output_size, num_classes))
-        ck_mask_input = KL.Input(shape=(output_size, output_size, num_classes))
-        shape_input = KL.Input(shape=(max_objects, 2))
-        center_offset_input = KL.Input(shape=(max_objects, 2))
-        indices_input = KL.Input(shape=(max_objects, 2), dtype=tf.int64)
-        indices_mask_input = KL.Input(shape=(max_objects, 1))
+        image_input = KL.Input(shape=(input_size, input_size, 3), name='image')
+        ck_hm_input = KL.Input(shape=(output_size, output_size, num_classes), name='center_keypoint_heatmap')
+        ck_mask_input = KL.Input(shape=(output_size, output_size, num_classes), name='center_keypoint_mask')
+        shape_input = KL.Input(shape=(max_objects, 2), name='shape')
+        center_offset_input = KL.Input(shape=(max_objects, 2), name='center_offset')
+        indices_input = KL.Input(shape=(max_objects, 2), dtype=tf.int64, name='indices')
+        indices_mask_input = KL.Input(shape=(max_objects, 1), name='indices_mask')
 
         resnet = KA.ResNet50V2(weights='imagenet',
                                input_tensor=image_input,  # KL.Input(shape=(32*16, 32*16, 3) # 32*ResNetOutputSize = Inputsize
@@ -219,7 +226,7 @@ class CenterNetBuilder(object):
         y3 = KL.ReLU()(y3)
         y3 = KL.Conv2D(2, 1, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(y3)
 
-        loss_ = KL.Lambda(loss, name='centernet_loss')([y1, y2, y3, ck_hm_input, ck_mask_input, shape_input, center_offset_input, indices_input, indices_mask_input])
+        loss_ = KL.Lambda(loss, name='loss_as_output')([y1, y2, y3, ck_hm_input, ck_mask_input, shape_input, center_offset_input, indices_input, indices_mask_input])
         train_model = KM.Model(inputs=[image_input, indices_input, indices_mask_input, center_offset_input, shape_input, ck_hm_input, ck_mask_input], outputs=[loss_])
 
         # detections = decode(y1, y2, y3)

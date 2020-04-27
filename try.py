@@ -272,7 +272,7 @@ if __name__ == '__main__':
     # example()
     # about_model_BageNet()
     # about_model_ResnetKeypoint()
-    about_keras_model_ResNet50V2()
+    # about_keras_model_ResNet50V2()
     # about_keras_model_CenterNet("pred")
     # about_keras_model_InceptionResNetV2()
     # about_dataset_coco()

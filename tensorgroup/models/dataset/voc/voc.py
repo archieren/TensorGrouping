@@ -60,7 +60,6 @@ class VocInput:
 
     def __gen_input__(self, dataset, network_input_config):
         decoder = self.Decoder(self.ImageNormalizer())
-        # 定义所期望的输入格式！ dataset = (normailized_and_resized_image, ground_truth, center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask)
         inputs_def = self._inputs_definer(network_input_config,
                                           num_classes=self._num_classes,
                                           max_objects=self._max_objects)
