@@ -8,7 +8,9 @@ import os
 from matplotlib import pyplot as plt
 
 import numpy as np
+import cv2
 import tensorflow as tf
+import tensorflow.keras as K
 from lxml import etree
 from tensorgroup.models.dataset import mode_keys as ModeKey
 
@@ -60,7 +62,7 @@ def about_dataset_voc():
     inputs_definer = DefineInputs
     dataset = voc.VocInput(inputs_definer=inputs_definer, mode=MK.TRAIN, batch_size=2, num_exsamples=4)
 
-    for inputs in dataset(centernet_input_config):
+    for inputs, targets in dataset(centernet_input_config):
         plt.imshow(inputs['image'][0])
         plt.show()
         print(inputs['indices'])
@@ -110,9 +112,17 @@ def train():
     from tensorgroup.models.dataset.centernet_inputs import DefineInputs
     from tensorgroup.models.dataset.voc import voc_custom
     from tensorgroup.models.networks import CenterNetBuilder as CNB
-    tfr_dir = "./data_voc/tf_records"
+
+    checkpoint_dir = os.path.join(os.getcwd(), 'work', 'centernet', 'ckpt')
+    saved_model_dir = os.path.join(os.getcwd(), 'work', 'centernet', 'sm')
+    if not os.path.exists(checkpoint_dir):   # model_dir 不应出现这种情况.
+        os.makedirs(checkpoint_dir)
+    if not os.path.exists(saved_model_dir):   # model_dir 不应出现这种情况.
+        os.makedirs(saved_model_dir)
+
+    tfr_dir = os.path.join(os.getcwd(), 'data_voc', 'tf_records')  # "./data_voc/tf_records"
     inputs_definer = DefineInputs
-    dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=2, buffer_size=10000)
+    dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=-1, repeat_num=2, buffer_size=10000)
     train_model, _, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes))
     train_model.summary()
 
@@ -120,7 +130,45 @@ def train():
         return y_pred
 
     train_model.compile(optimizer=KO.Adam(lr=1e-3), loss={'loss_as_output': center_loss})
-    train_model.fit(dataset(centernet_input_config), epochs=100)
+
+    checkpoint_path = os.path.join(checkpoint_dir, 'cp.ckpt')
+    cp_callback = K.callbacks.ModelCheckpoint(filepath=checkpoint_path, save_weights_only=True, verbose=1, save_freq='epoch')
+    latest = tf.train.latest_checkpoint(checkpoint_dir)
+    if latest is not None:
+        train_model.load_weights(latest)
+    train_model.fit(dataset(centernet_input_config), epochs=2, callbacks=[cp_callback])
+    train_model.save(os.path.join(saved_model_dir, 'tiexie_model.h5'))
+
+def load_image(image_index):
+    """
+        Load an image at the image_index.
+        """
+    path = os.path.join(os.getcwd(), 'data_voc', 'JPEGImages', '({}).jpg'.format(image_index))
+    print(path)
+    image = cv2.imread(path)
+    return image
+
+def predict():
+    saved_model_dir = os.path.join(os.getcwd(), 'work', 'centernet', 'sm')
+
+    from tensorgroup.models.networks import CenterNetBuilder as CNB
+    from tensorgroup.models.dataset.voc import voc_custom
+
+    _, predict_model, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes))
+
+    predict_model.load_weights(os.path.join(saved_model_dir, 'tiexie_model.h5'), by_name=True, skip_mismatch=True)
+    print("hello")
+    for index in range(3, 5):
+        print("hello")
+        image = load_image(index)
+        print(image)
+        image_t = tf.convert_to_tensor(image)
+
+        image_t = voc_custom.VocCustomInput.ImageNormalizer()(image_t)
+        image_t = tf.image.resize(image, [512, 512], method=tf.image.ResizeMethod.BILINEAR)
+        image_input = tf.expand_dims(image_t, axis=0)
+        predicts = predict_model.predict(image_input)
+        print(predicts[0])
 
 
 if __name__ == '__main__':
@@ -132,4 +180,5 @@ if __name__ == '__main__':
     # test_gather()
     # test_meshgrid()
     # test_gengaussian()
-    train()
+    # train()
+    predict()

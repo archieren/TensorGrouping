@@ -45,7 +45,7 @@ class DefineInputs:
         # ground_truth: [y_center, x_center, height, width, classid]
 
         indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
-        # 在这个地方，有必要给些注释：DataSet + Dictionary
+        # 在这个地方，有必要给些注释：Model.fit 对 DataSet输入格式，是有要求的！
         return ({'image': image,
                  'indices': indices,
                  'indices_mask': indices_mask,
@@ -78,7 +78,7 @@ class DefineInputs:
 
         objects_num = tf.argmin(ground_truth, axis=0)
         objects_num = objects_num[0]
-        ground_truth = tf.gather(ground_truth, tf.range(0, objects_num, dtype=tf.int32))
+        ground_truth = tf.gather(ground_truth, tf.range(0, objects_num, dtype=tf.int64))
 
         # ground_truth的shape应为(objects_num, 5)
         c_y = ground_truth[..., 0] * f_h
