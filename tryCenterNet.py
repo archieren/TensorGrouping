@@ -141,8 +141,8 @@ def train():
 
 def load_image(image_index):
     """
-        Load an image at the image_index.
-        """
+    Load an image at the image_index.
+    """
     path = os.path.join(os.getcwd(), 'data_voc', 'JPEGImages', '({}).jpg'.format(image_index))
     print(path)
     image = cv2.imread(path)
@@ -158,7 +158,7 @@ def predict():
 
     predict_model.load_weights(os.path.join(saved_model_dir, 'tiexie_model.h5'), by_name=True, skip_mismatch=True)
     print("hello")
-    for index in range(3, 5):
+    for index in range(8, 9):
         print("hello")
         image = load_image(index)
         print(image)

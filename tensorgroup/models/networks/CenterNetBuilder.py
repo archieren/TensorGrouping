@@ -38,25 +38,25 @@ def focal_loss(ck_hm_pred, ck_hm_true, ck_hm_mask):
     return cls_loss
 
 
-def reg_l1_loss(y_pred, y_true, indices, indices_mask):
+def reg_l1_loss(y_pred, y_true, indices_pos, indices_mask):
     """
     Args:
        - y_pred: With shape [B, Feature_Map_Shape, 2]
        - y_true: With shape [B, N, 2]
-       - indices: With shape [B, N, 2]
+       - indices_pos: With shape [B, N, 2]
        - indices_mask: With shape [B, N, 1]
     """
-    y_pred = tf.gather_nd(y_pred, indices, batch_dims=1)
+    y_pred = tf.gather_nd(y_pred, indices_pos, batch_dims=1)
     indices_mask = tf.tile(indices_mask, (1, 1, 2))
     total_loss = tf.reduce_sum(tf.abs(y_true * indices_mask - y_pred * indices_mask))
     reg_loss = total_loss / (tf.reduce_sum(indices_mask) + 1e-4)
     return reg_loss
 
 def loss(args):
-    ck_hm_pred, shape_pred, center_offset_pred, ck_hm_true, ck_hm_mask, shape_true, center_offset_true, indices, indices_mask = args
+    ck_hm_pred, shape_pred, center_offset_pred, ck_hm_true, ck_hm_mask, shape_true, center_offset_true, indices_pos, indices_mask = args
     hm_loss = focal_loss(ck_hm_pred, ck_hm_true, ck_hm_mask)
-    wh_loss = reg_l1_loss(shape_pred, shape_true, indices, indices_mask)*0.1
-    reg_loss = reg_l1_loss(center_offset_pred, center_offset_true, indices, indices_mask)
+    wh_loss = reg_l1_loss(shape_pred, shape_true, indices_pos, indices_mask)*0.1
+    reg_loss = reg_l1_loss(center_offset_pred, center_offset_true, indices_pos, indices_mask)
     total_loss = hm_loss + wh_loss + reg_loss
     return tf.expand_dims(total_loss, axis=-1)
 
@@ -70,20 +70,17 @@ def nms(heat, kernel=3):
 def topk(hm, max_objects=100):
     hm = nms(hm)
     # (b, h * w * c)
-    b, h, w, c = tf.shape(hm)[0], tf.shape(hm)[1], tf.shape(hm)[2], tf.shape(hm)[3]
-    # hm2 = tf.transpose(hm, (0, 3, 1, 2))
-    # hm2 = tf.reshape(hm2, (b, c, -1))
+    b, _, w, _ = tf.shape(hm)[0], tf.shape(hm)[1], tf.shape(hm)[2], tf.shape(hm)[3]
+
+    hm, indices_classid = tf.nn.top_k(hm, k=1)
     hm = tf.reshape(hm, (b, -1))
     # (b, k), (b, k)
-    scores, indices = tf.nn.top_k(hm, k=max_objects)
-    # scores2, indices2 = tf.nn.top_k(hm2, k=max_objects)
-    # scores2 = tf.reshape(scores2, (b, -1))
-    # topk = tf.nn.top_k(scores2, k=max_objects)
-    class_ids = indices % c
-    xs = indices // c % w
-    ys = indices // c // w
-    indices = ys * w + xs
-    return scores, indices, class_ids, xs, ys
+    scores, indices_pos = tf.nn.top_k(hm, k=max_objects)
+    class_ids = tf.gather(tf.reshape(indices_classid, (b, -1)), indices_pos, batch_dims=1)
+    xs = indices_pos % w
+    ys = indices_pos // w
+    indices_pos = ys * w + xs
+    return scores, indices_pos, class_ids, xs, ys
 
 
 def evaluate_batch_item(batch_item_detections,
@@ -108,8 +105,8 @@ def evaluate_batch_item(batch_item_detections,
 
     def filter():
         nonlocal batch_item_detections
-        _, indices = tf.nn.top_k(batch_item_detections[:, 4], k=max_objects)
-        batch_item_detections_ = tf.gather(batch_item_detections, indices)
+        _, indices_pos = tf.nn.top_k(batch_item_detections[:, 4], k=max_objects)
+        batch_item_detections_ = tf.gather(batch_item_detections, indices_pos)
         return batch_item_detections_
 
     def pad():
@@ -142,16 +139,16 @@ def decode(hm,
         hm = (hm[0:1] + hm[1:2, :, ::-1]) / 2
         wh = (wh[0:1] + wh[1:2, :, ::-1]) / 2
         reg = reg[0:1]
-    scores, indices, class_ids, xs, ys = topk(hm, max_objects=max_objects)
+    scores, indices_pos, class_ids, xs, ys = topk(hm, max_objects=max_objects)
     b = tf.shape(hm)[0]
     # (b, h * w, 2)
     reg = tf.reshape(reg, (b, -1, tf.shape(reg)[-1]))
     # (b, h * w, 2)
     wh = tf.reshape(wh, (b, -1, tf.shape(wh)[-1]))
     # (b, k, 2)
-    topk_reg = tf.gather(reg, indices, batch_dims=1)
+    topk_reg = tf.gather(reg, indices_pos, batch_dims=1)
     # (b, k, 2)
-    topk_wh = tf.cast(tf.gather(wh, indices, batch_dims=1), tf.float32)
+    topk_wh = tf.cast(tf.gather(wh, indices_pos, batch_dims=1), tf.float32)
     topk_cx = tf.cast(tf.expand_dims(xs, axis=-1), tf.float32) + topk_reg[..., 0:1]
     topk_cy = tf.cast(tf.expand_dims(ys, axis=-1), tf.float32) + topk_reg[..., 1:2]
     scores = tf.expand_dims(scores, axis=-1)
@@ -177,7 +174,7 @@ class CenterNetBuilder(object):
         # assert backbone in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
         # dataset 来的输入如下:（参见centernet_inputs.py）
         #        {'image': image,
-        #         'indices': indices,
+        #         'indices_pos': indices_pos,
         #         'indices_mask': indices_mask,
         #         'center_offset': center_offset,
         #         'shape': shape,
@@ -189,7 +186,7 @@ class CenterNetBuilder(object):
         ck_mask_input = KL.Input(shape=(output_size, output_size, num_classes), name='center_keypoint_mask')
         shape_input = KL.Input(shape=(max_objects, 2), name='shape')
         center_offset_input = KL.Input(shape=(max_objects, 2), name='center_offset')
-        indices_input = KL.Input(shape=(max_objects, 2), dtype=tf.int64, name='indices')
+        indices_input = KL.Input(shape=(max_objects, 2), dtype=tf.int64, name='indices_pos')
         indices_mask_input = KL.Input(shape=(max_objects, 1), name='indices_mask')
 
         resnet = KA.ResNet50V2(weights='imagenet',
