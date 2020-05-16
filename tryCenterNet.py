@@ -136,7 +136,7 @@ def train():
     latest = tf.train.latest_checkpoint(checkpoint_dir)
     if latest is not None:
         train_model.load_weights(latest)
-    train_model.fit(dataset(centernet_input_config), epochs=2, callbacks=[cp_callback])
+    train_model.fit(dataset(centernet_input_config), epochs=100, callbacks=[cp_callback])
     train_model.save(os.path.join(saved_model_dir, 'tiexie_model.h5'))
 
 def load_image(image_index):
@@ -154,21 +154,34 @@ def predict():
     from tensorgroup.models.networks import CenterNetBuilder as CNB
     from tensorgroup.models.dataset.voc import voc_custom
 
-    _, predict_model, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes))
+    _, predict_model, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes), score_threshold=0.01)
 
     predict_model.load_weights(os.path.join(saved_model_dir, 'tiexie_model.h5'), by_name=True, skip_mismatch=True)
-    print("hello")
-    for index in range(8, 9):
-        print("hello")
+    for index in range(254, 257):
         image = load_image(index)
-        print(image)
         image_t = tf.convert_to_tensor(image)
-
         image_t = voc_custom.VocCustomInput.ImageNormalizer()(image_t)
-        image_t = tf.image.resize(image, [512, 512], method=tf.image.ResizeMethod.BILINEAR)
+        print(tf.reduce_max(image_t))
+        image_t = tf.image.resize(image_t, [512, 512], method=tf.image.ResizeMethod.BILINEAR)
         image_input = tf.expand_dims(image_t, axis=0)
-        predicts = predict_model.predict(image_input)
-        print(predicts[0])
+        predicts = predict_model.predict(image_input)[0]
+        scores = predicts[:, 4]
+        indices = np.where(scores > 0.1)
+        detections = predicts[indices].copy()
+        print(detections.shape)
+        scale = (512 / 256) * (128 / 512)
+        for detection in detections:
+            xmin = int(round(detection[0])/scale)
+            ymin = int(round(detection[1])/scale)
+            xmax = int(round(detection[2])/scale)
+            ymax = int(round(detection[3])/scale)
+            # score = '{:.4f}'.format(detection[4])
+            # class_id = int(detection[5])
+            cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (255, 0, 0), 1)
+        # cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+        # cv2.imshow("image", image)
+        plt.imshow(image)
+        plt.show()
 
 
 if __name__ == '__main__':

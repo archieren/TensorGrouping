@@ -6,6 +6,8 @@ from __future__ import division
 import tensorflow as tf
 from tensorflow import keras
 
+import tensorgroup.models.networks.ResnetBuilder as RB
+
 KA = keras.applications
 KL = keras.layers
 KM = keras.models
@@ -153,10 +155,10 @@ def decode(hm,
     topk_cy = tf.cast(tf.expand_dims(ys, axis=-1), tf.float32) + topk_reg[..., 1:2]
     scores = tf.expand_dims(scores, axis=-1)
     class_ids = tf.cast(tf.expand_dims(class_ids, axis=-1), tf.float32)
-    topk_x1 = topk_cx - topk_wh[..., 0:1] / 2
-    topk_x2 = topk_cx + topk_wh[..., 0:1] / 2
-    topk_y1 = topk_cy - topk_wh[..., 1:2] / 2
-    topk_y2 = topk_cy + topk_wh[..., 1:2] / 2
+    topk_x1 = topk_cx - topk_wh[..., 1:2] / 2
+    topk_x2 = topk_cx + topk_wh[..., 1:2] / 2
+    topk_y1 = topk_cy - topk_wh[..., 0:1] / 2
+    topk_y2 = topk_cy + topk_wh[..., 0:1] / 2
     # (b, k, 6)
     detections = tf.concat([topk_x1, topk_y1, topk_x2, topk_y2, scores, class_ids], axis=-1)
     if nms:
@@ -189,10 +191,11 @@ class CenterNetBuilder(object):
         indices_input = KL.Input(shape=(max_objects, 2), dtype=tf.int64, name='indices_pos')
         indices_mask_input = KL.Input(shape=(max_objects, 1), name='indices_mask')
 
-        resnet = KA.ResNet50V2(weights='imagenet',
-                               input_tensor=image_input,  # KL.Input(shape=(32*16, 32*16, 3) # 32*ResNetOutputSize = Inputsize
-                               include_top=False)
-
+        # resnet = KA.ResNet50V2(weights='imagenet',
+        #                        input_tensor=image_input,  # KL.Input(shape=(32*16, 32*16, 3) # 32*ResNetOutputSize = Inputsize
+        #                        include_top=False)
+        resnet = RB.ResnetBuilder.build_resnet_50(image_input, 0, include_top=True)
+        # resnet.summary()
         # (b, 16, 16, 2048)
         C5 = resnet.output
         # C5 = resnet.outputs[-1]

@@ -30,7 +30,7 @@ class DefineInputs:
         """将features转换成模型需要的形式
         Args:
             image: Normalized image.
-            ground_truth: Unpadded Ground truth!
+            ground_truth: Unpadded Ground truth! 将补充为。。。
         Returns: 将loss里需要的输入全部事先计算出来
             image: Resized image.
             ground_truth：Padded Groundtruth.
@@ -47,7 +47,7 @@ class DefineInputs:
         indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
         # 在这个地方，有必要给些注释：Model.fit 对 DataSet输入格式，是有要求的！
         return ({'image': image,
-                 'indices': indices,
+                 'indices_pos': indices,
                  'indices_mask': indices_mask,
                  'center_offset': center_offset,
                  'shape': shape,
