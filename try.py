@@ -2,6 +2,7 @@
 # import multiprocessing
 import numpy as np
 import skimage.io as io
+import cv2
 
 from pycocotools.coco import COCO
 
@@ -244,6 +245,17 @@ def example():
                    metrics=['sparse_categorical_accuracy'])
     modelB.fit(imagenet2012_train.batch(8), epochs=1)
 
+def about_video_stream():
+    cap = cv2.VideoCapture("rtsp://admin:12345678zcj@192.168.101.236:554//h264/ch34/main/av_stream")
+    ret, frame = cap.read()
+    while ret:
+        ret, frame = cap.read()
+        cv2.imshow("frame", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    cv2.destroyAllWindows()
+    cap.release()
+
 
 """
 TOSEE: How to make a gaussian kernel
@@ -278,3 +290,4 @@ if __name__ == '__main__':
     # about_dataset_coco()
     # about_dataset_fashion_mnist()
     # about_coco_api()
+    about_video_stream()
