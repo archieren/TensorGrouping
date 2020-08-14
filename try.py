@@ -246,7 +246,8 @@ def example():
     modelB.fit(imagenet2012_train.batch(8), epochs=1)
 
 def about_video_stream():
-    cap = cv2.VideoCapture("rtsp://admin:12345678zcj@192.168.101.236:554//h264/ch34/main/av_stream")
+    cap = cv2.VideoCapture("rtsp://admin:12345678zcj@192.168.101.243:554//h264/ch40/main/av_stream")
+    # rtsp://admin:12345678zcj@192.168.101.236:554//h264/ch34/main/av_stream
     ret, frame = cap.read()
     while ret:
         ret, frame = cap.read()
