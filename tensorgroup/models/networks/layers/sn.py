@@ -1,11 +1,24 @@
 import tensorflow as tf  # TF 2.0
 
+KB = tf.keras.backend
+
+def power_iteration(W, u, rounds=1):
+    '''
+    Accroding the paper, we only need to do power iteration one time.
+    '''
+    _u = u
+    for i in range(rounds):
+        _v = KB.l2_normalize(KB.dot(_u, W))
+        _u = KB.l2_normalize(KB.dot(_v, KB.transpose(W)))
+
+    sigma = KB.sum(KB.dot(KB.dot(_u, W), KB.transpose(_v)))
+    return sigma, _u, _v
+
 
 class SpectralNormalization(tf.keras.layers.Wrapper):
-    def __init__(self, layer, iteration=1, eps=1e-12, training=True, **kwargs):
-        self.iteration = iteration
-        self.eps = eps
-        self.do_power_iteration = training
+    def __init__(self, layer, **kwargs):
+        self.iteration = 1
+        self.eps = 1e-12
         if not isinstance(layer, tf.keras.layers.Layer):
             raise ValueError(
                 'Please initialize `TimeDistributed` layer with a '
@@ -16,15 +29,11 @@ class SpectralNormalization(tf.keras.layers.Wrapper):
         self.layer.build(input_shape)
 
         self.w = self.layer.kernel
-        self.w_shape = self.w.shape.as_list()
+        # With shape [KH, KW, Cin, Cout] or [H, W]
+        # kernel.shape 一般是 [filter_height, filter_width, in_channels, out_channels]
 
-        self.v = self.add_weight(shape=(1, self.w_shape[0] * self.w_shape[1] * self.w_shape[2]),
-                                 initializer=tf.initializers.TruncatedNormal(stddev=0.02),
-                                 trainable=False,
-                                 name='sn_v',
-                                 dtype=tf.float32)
 
-        self.u = self.add_weight(shape=(1, self.w_shape[-1]),
+        self.u = self.add_weight(shape=(1, self.w.shape[-1]), # [1, Cout] or [1, W]
                                  initializer=tf.initializers.TruncatedNormal(stddev=0.02),
                                  trainable=False,
                                  name='sn_u',
@@ -32,30 +41,21 @@ class SpectralNormalization(tf.keras.layers.Wrapper):
 
         super(SpectralNormalization, self).build()
 
-    def call(self, inputs):
-        self.update_weights()
-        output = self.layer(inputs)
-        self.restore_weights()  # Restore weights because of this formula "W = W - alpha * W_SN`"
+    def call(self, inputs, training=False):
+        if training :
+            self.update_weights()
+            output = self.layer(inputs)
+            self.restore_weights()  # Restore weights because of this formula "W = W - alpha * W_SN`"
+        else:
+            output = self.layer(inputs)
+
         return output
 
     def update_weights(self):
-        w_reshaped = tf.reshape(self.w, [-1, self.w_shape[-1]])
-
-        u_hat = self.u
-        v_hat = self.v  # init v vector
-
-        if self.do_power_iteration:
-            for _ in range(self.iteration):
-                v_ = tf.matmul(u_hat, tf.transpose(w_reshaped))
-                v_hat = v_ / (tf.reduce_sum(v_**2)**0.5 + self.eps)
-
-                u_ = tf.matmul(v_hat, w_reshaped)
-                u_hat = u_ / (tf.reduce_sum(u_**2)**0.5 + self.eps)
-
-        sigma = tf.matmul(tf.matmul(v_hat, w_reshaped), tf.transpose(u_hat))
+        self.w.assign(self.layer.kernel)
+        w_reshaped = tf.reshape(self.w, [self.w.shape[-1], -1]) # [Cout, KH*KW*Cin] or [W, H]
+        sigma, u_hat, _ = power_iteration(w_reshaped, self.u)
         self.u.assign(u_hat)
-        self.v.assign(v_hat)
-
         self.layer.kernel.assign(self.w / sigma)
 
     def restore_weights(self):

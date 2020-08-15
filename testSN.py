@@ -16,7 +16,7 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 batch_size = 200
 buffer_size = 2000
-num_epochs = 10 # 200
+num_epochs = 6 # 200
 
 (train_images, train_labels), (_, _) = KD.mnist.load_data()
 
@@ -40,7 +40,7 @@ output = KL.Dense(10, activation='softmax')(x)
 model = KM.Model(inputs=inputs, outputs=output)
 
 def loss(model, x, y):
-    y_ = model(x)
+    y_ = model(x, training=True)
     return loss_object(y_true=y, y_pred=y_)
 
 
@@ -57,6 +57,8 @@ optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
 train_loss_results = []
 train_accuracy_results = []
 
+print(model.trainable_variables)
+
 for epoch in range(num_epochs):
     epoch_loss_avg = tf.keras.metrics.Mean()
     epoch_accuracy = tf.keras.metrics.SparseCategoricalAccuracy()
@@ -66,7 +68,7 @@ for epoch in range(num_epochs):
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
         epoch_loss_avg(loss_value)
-        epoch_accuracy(y, model(x))
+        epoch_accuracy(y, model(x, training=False))
 
     train_loss_results.append(epoch_loss_avg.result())
     train_accuracy_results.append(epoch_accuracy.result())
