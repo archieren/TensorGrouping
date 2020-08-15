@@ -1,38 +1,46 @@
 import tensorflow as tf  # TF 2.0
+import os
+
 from tensorgroup.models.networks.layers.sn import SpectralNormalization
 
-from tensorflow.keras import datasets, layers, models
 
+KA = tf.keras.applications
+KL = tf.keras.layers
+KO = tf.keras.optimizers
+
+KD = tf.keras.datasets
+KM = tf.keras.models
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # or any {'0', '1', '2'}
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 batch_size = 200
 buffer_size = 2000
-num_epochs = 200
-method = 'func'
+num_epochs = 10 # 200
 
-(train_images, train_labels), (_, _) = datasets.mnist.load_data()
+(train_images, train_labels), (_, _) = KD.mnist.load_data()
 
 train_images = train_images.reshape((60000, 28, 28, 1)).astype('float32')
 
 train_images = train_images / 255.0
+train_labels = train_labels.astype('float32')
 
 train_dataset = tf.data.Dataset.from_tensor_slices((train_images, train_labels)).shuffle(buffer_size).batch(batch_size)
 
-inputs = layers.Input(shape=(28,28,1))
-x = SpectralNormalization(layers.Conv2D(32, (3, 3), activation='relu'))(inputs)
-x = layers.MaxPooling2D((2, 2))(x)
-x = SpectralNormalization(layers.Conv2D(64, (3, 3), activation='relu'))(x)
-x = layers.MaxPooling2D((2, 2))(x)
-x = layers.Flatten()(x)
-x = layers.Dense(64, activation='relu')(x)
-output = layers.Dense(10, activation='softmax')(x)
-model = models.Model(inputs=inputs, outputs=output)
-model.summary()
 
+inputs = KL.Input(shape=(28,28,1), dtype=tf.float32)
 
+x = SpectralNormalization(KL.Conv2D(32, (3, 3), activation='relu'))(inputs)
+x = KL.MaxPooling2D((2, 2))(x)
+x = SpectralNormalization(KL.Conv2D(64, (3, 3), activation='relu'))(x)
+x = KL.MaxPooling2D((2, 2))(x)
+x = KL.Flatten()(x)
+x = KL.Dense(64, activation='relu')(x)
+output = KL.Dense(10, activation='softmax')(x)
+model = KM.Model(inputs=inputs, outputs=output)
 
 def loss(model, x, y):
     y_ = model(x)
-
     return loss_object(y_true=y, y_pred=y_)
 
 
@@ -66,3 +74,6 @@ for epoch in range(num_epochs):
     print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3%}".format(epoch,
                                                            epoch_loss_avg.result(),
                                                            epoch_accuracy.result()))
+
+# model.compile(optimizer= optimizer,loss= loss_object)
+# model.fit(train_dataset)

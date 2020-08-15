@@ -18,8 +18,8 @@ KA = tf.keras.applications
 KL = tf.keras.layers
 KO = tf.keras.optimizers
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # or any {'0', '1', '2'}
-os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'  # tensorflow < 2.3 时,还必须设置此项,否者基本的卷积都无法运行，奇怪的事.
 
 
 image_shape = (384, 384, 3)
@@ -136,7 +136,7 @@ def train():
     latest = tf.train.latest_checkpoint(checkpoint_dir)
     if latest is not None:
         train_model.load_weights(latest)
-    train_model.fit(dataset(centernet_input_config), epochs=100, callbacks=[cp_callback])
+    train_model.fit(dataset(centernet_input_config), epochs=1, callbacks=[cp_callback])
     train_model.save(os.path.join(saved_model_dir, 'tiexie_model.h5'))
 
 def load_image(image_index):
@@ -193,5 +193,5 @@ if __name__ == '__main__':
     # test_gather()
     # test_meshgrid()
     # test_gengaussian()
-    # train()
-    predict()
+    train()
+    # predict()
