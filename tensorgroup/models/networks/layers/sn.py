@@ -41,18 +41,14 @@ class SpectralNormalization(tf.keras.layers.Wrapper):
 
         super(SpectralNormalization, self).build()
 
-    def call(self, inputs, training=False):
-        if training :
-            self.update_weights()
-            output = self.layer(inputs)
-            self.restore_weights()  # Restore weights because of this formula "W = W - alpha * W_SN`"
-        else:
-            output = self.layer(inputs)
-
+    def call(self, inputs, training=True):
+        if training: self.update_weights()
+        output = self.layer(inputs)
+        if training: self.restore_weights()
         return output
 
     def update_weights(self):
-        self.w.assign(self.layer.kernel)
+        self.w.assign(self.layer.kernel)   # TODO
         w_reshaped = tf.reshape(self.w, [self.w.shape[-1], -1]) # [Cout, KH*KW*Cin] or [W, H]
         sigma, u_hat, _ = power_iteration(w_reshaped, self.u)
         self.u.assign(u_hat)

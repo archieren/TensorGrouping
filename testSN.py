@@ -1,9 +1,10 @@
 import tensorflow as tf  # TF 2.0
 import os
+import datetime
 
 from tensorgroup.models.networks.layers.sn import SpectralNormalization
 
-
+K  = tf.keras
 KA = tf.keras.applications
 KL = tf.keras.layers
 KO = tf.keras.optimizers
@@ -16,7 +17,7 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 batch_size = 200
 buffer_size = 2000
-num_epochs = 6 # 200
+num_epochs = 20 # 200
 
 (train_images, train_labels), (_, _) = KD.mnist.load_data()
 
@@ -54,28 +55,56 @@ loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
 
 optimizer = tf.keras.optimizers.Adam(learning_rate=0.01)
 
-train_loss_results = []
-train_accuracy_results = []
+checkpoint_dir = os.path.join(os.getcwd(), 'work', 'testSN', 'ckpt')
+saved_model_dir = os.path.join(os.getcwd(), 'work', 'testSN', 'sm')
 
-print(model.trainable_variables)
+if not os.path.exists(checkpoint_dir):   # model_dir 不应出现这种情况.
+    os.makedirs(checkpoint_dir)
+if not os.path.exists(saved_model_dir):   # model_dir 不应出现这种情况.
+    os.makedirs(saved_model_dir)
+
+checkpoint_path = os.path.join(checkpoint_dir, 'cp.ckpt')
+
+
+latest = tf.train.latest_checkpoint(checkpoint_dir)
+if latest is not None:
+    model.load_weights(latest)
+
+
+####################################################################################By Fit
+"""
+log_dir=os.path.join(os.getcwd(), 'work','testSN', 'log', 'fit', datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+if not os.path.exists(log_dir):  os.makedirs(log_dir)
+cp_callback = K.callbacks.ModelCheckpoint(filepath=checkpoint_path, save_weights_only=True, verbose=1, save_freq='epoch')
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+model.compile(optimizer= optimizer,loss= loss_object)
+model.fit(train_dataset, epochs=num_epochs, callbacks=[cp_callback, tensorboard_callback])
+model.save(os.path.join(saved_model_dir, 'testSN.h5'))
+"""
+####################################################################################
+train_log_dir =os.path.join(os.getcwd(), 'work','testSN', 'log', 'gradient_tape', datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), 'train')
+#test_log_dir =os.path.join(os.getcwd(), 'work','testSN', 'log', 'gradient_tape', datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), 'test')
+train_summary_writer = tf.summary.create_file_writer(train_log_dir)
+#test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
 for epoch in range(num_epochs):
-    epoch_loss_avg = tf.keras.metrics.Mean()
-    epoch_accuracy = tf.keras.metrics.SparseCategoricalAccuracy()
+    train_epoch_loss = tf.keras.metrics.Mean()
+    train_epoch_accuracy = tf.keras.metrics.SparseCategoricalAccuracy()
 
     for x, y in train_dataset:
         loss_value, grads = grad(model, x, y)
         optimizer.apply_gradients(zip(grads, model.trainable_variables))
 
-        epoch_loss_avg(loss_value)
-        epoch_accuracy(y, model(x, training=False))
-
-    train_loss_results.append(epoch_loss_avg.result())
-    train_accuracy_results.append(epoch_accuracy.result())
+        train_epoch_loss(loss_value)
+        train_epoch_accuracy(y, model(x, training=False))
 
     print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3%}".format(epoch,
-                                                           epoch_loss_avg.result(),
-                                                           epoch_accuracy.result()))
+                                                           train_epoch_loss.result(),
+                                                           train_epoch_accuracy.result()))
+    with train_summary_writer.as_default():
+        tf.summary.scalar('loss', train_epoch_loss.result(), step=epoch)
+        tf.summary.scalar('accuracy', train_epoch_accuracy.result(), step=epoch)
 
-# model.compile(optimizer= optimizer,loss= loss_object)
-# model.fit(train_dataset)
+    train_epoch_loss.reset_states()
+    train_epoch_accuracy.reset_states()
+
