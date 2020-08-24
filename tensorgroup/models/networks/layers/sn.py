@@ -28,7 +28,11 @@ class SpectralNormalization(tf.keras.layers.Wrapper):
     def build(self, input_shape):
         self.layer.build(input_shape)
 
-        self.w = self.layer.kernel
+        # self.w = self.layer.kernel
+        self.w = self.add_weight(name='sn_w',
+                                 shape=self.layer.kernel.shape,  # 采取这样的方式，可能更合乎原论文的意思。
+                                 trainable=False,
+                                 dtype=self.layer.kernel.dtype)
         # With shape [KH, KW, Cin, Cout] or [H, W]
         # kernel.shape 一般是 [filter_height, filter_width, in_channels, out_channels]
 
@@ -48,7 +52,7 @@ class SpectralNormalization(tf.keras.layers.Wrapper):
         return output
 
     def update_weights(self):
-        self.w.assign(self.layer.kernel)   # TODO
+        self.w.assign(self.layer.kernel) 
         w_reshaped = tf.reshape(self.w, [self.w.shape[-1], -1]) # [Cout, KH*KW*Cin] or [W, H]
         sigma, u_hat, _ = power_iteration(w_reshaped, self.u)
         self.u.assign(u_hat)
