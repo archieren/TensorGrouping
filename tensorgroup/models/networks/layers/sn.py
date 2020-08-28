@@ -52,7 +52,7 @@ class SpectralNormalization(tf.keras.layers.Wrapper):
         return output
 
     def update_weights(self):
-        self.w.assign(self.layer.kernel) 
+        self.w.assign(self.layer.kernel)
         w_reshaped = tf.reshape(self.w, [self.w.shape[-1], -1]) # [Cout, KH*KW*Cin] or [W, H]
         sigma, u_hat, _ = power_iteration(w_reshaped, self.u)
         self.u.assign(u_hat)
