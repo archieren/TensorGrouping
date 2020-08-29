@@ -1,5 +1,5 @@
 import tensorflow as tf  # TF 2.0
-import tensorgroup.models.networks.layers.rsu as RSU
+import tensorgroup.models.networks.U2netBuilder as U2B
 
 KL = tf.keras.layers
 KM = tf.keras.models
@@ -8,9 +8,9 @@ KU = tf.keras.utils
 KR = tf.keras.regularizers
 
 
-inputs = KL.Input(shape=(64, 64, 3), dtype=tf.float32)
 
-outputs = RSU.RSU4F()(inputs)
+model = U2B.U2netBuilder.u_2_net(input_shape=(None,None,3))
+model.summary()
 
-model = KM.Model(inputs=inputs, outputs=outputs)
+model = U2B.U2netBuilder.u_2_net_p(input_shape=(1920,1024,3))
 model.summary()
