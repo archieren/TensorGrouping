@@ -12,5 +12,5 @@ KR = tf.keras.regularizers
 model = U2B.U2netBuilder.u_2_net(input_shape=(None,None,3))
 model.summary()
 
-model = U2B.U2netBuilder.u_2_net_p(input_shape=(1920,1024,3))
+model = U2B.U2netBuilder.u_2_net_p(input_shape=(32,32,3))
 model.summary()

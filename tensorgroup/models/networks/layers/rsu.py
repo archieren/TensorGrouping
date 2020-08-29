@@ -77,23 +77,23 @@ class RSU7(KL.Layer):
 
     def call(self, x):
         down_x = x
-        hor_x_0, down_x = down_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), down_x, pooling=False)
+        hor_x_0, down_x = down_RBC_with(relu_bn_conv(filters=self.filters), down_x, pooling=False)
 
-        hor_x_1, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_2, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_3, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_4, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_5, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_6, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x, pooling=False)
+        hor_x_1, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_2, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_3, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_4, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_5, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_6, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x, pooling=False)
 
         up_x = floor_RBC(relu_bn_conv(filters=self.mid_filters, dilation_rate=2), down_x)
 
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_6, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_5, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_4, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_3, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_2, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), hor_x_1, up_x, upsampling=False)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_6, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_5, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_4, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_3, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_2, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.filters), hor_x_1, up_x, upsampling=False)
 
         return hor_x_0+up_x
 
@@ -121,21 +121,21 @@ class RSU6(KL.Layer):
 
     def call(self, x):
         down_x = x
-        hor_x_0, down_x = down_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), down_x, pooling=False)
+        hor_x_0, down_x = down_RBC_with(relu_bn_conv(filters=self.filters), down_x, pooling=False)
 
-        hor_x_1, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_2, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_3, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_4, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_5, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x, pooling=False)
+        hor_x_1, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_2, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_3, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_4, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_5, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x, pooling=False)
 
         up_x = floor_RBC(relu_bn_conv(filters=self.mid_filters, dilation_rate=2), down_x)
 
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_5, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_4, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_3, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_2, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), hor_x_1, up_x, upsampling=False)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_5, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_4, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_3, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_2, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.filters), hor_x_1, up_x, upsampling=False)
 
         return hor_x_0+up_x
 
@@ -164,19 +164,19 @@ class RSU5(KL.Layer):
 
     def call(self, x):
         down_x = x
-        hor_x_0, down_x = down_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), down_x, pooling=False)
+        hor_x_0, down_x = down_RBC_with(relu_bn_conv(filters=self.filters), down_x, pooling=False)
 
-        hor_x_1, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_2, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_3, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_4, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x, pooling=False)
+        hor_x_1, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_2, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_3, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_4, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x, pooling=False)
 
         up_x = floor_RBC(relu_bn_conv(filters=self.mid_filters, dilation_rate=2), down_x)
 
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_4, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_3, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_2, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), hor_x_1, up_x, upsampling=False)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_4, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_3, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_2, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.filters), hor_x_1, up_x, upsampling=False)
 
         return hor_x_0+up_x
 
@@ -204,16 +204,16 @@ class RSU4(KL.Layer):
 
     def call(self, x):
         down_x = x
-        hor_x_0, down_x = down_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), down_x, pooling=False)
+        hor_x_0, down_x = down_RBC_with(relu_bn_conv(filters=self.filters), down_x, pooling=False)
 
-        hor_x_1, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_2, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x)
-        hor_x_3, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), down_x, pooling=False)
+        hor_x_1, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_2, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x)
+        hor_x_3, down_x = down_RBC_with(relu_bn_conv(filters=self.mid_filters), down_x, pooling=False)
 
         up_x = floor_RBC(relu_bn_conv(filters=self.mid_filters, dilation_rate=2), down_x)
 
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_3, up_x)
-        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=1), hor_x_2, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_3, up_x)
+        up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_2, up_x)
         up_x = up_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), hor_x_1, up_x, upsampling=False)
 
         return hor_x_0+up_x
