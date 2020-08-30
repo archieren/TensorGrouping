@@ -6,55 +6,51 @@ KB = tf.keras.backend
 KU = tf.keras.utils
 KR = tf.keras.regularizers
 
+
+def down_with(down_in, filters, droping=False,):
+    hor_out = KL.Conv2D(filters, 3, activation='relu', padding='same', kernel_initializer='he_normal')(down_in)
+    hor_out = KL.Conv2D(filters, 3, activation='relu', padding='same', kernel_initializer='he_normal')(hor_out)
+    if droping:
+        hor_out = KL.Dropout(0.5)(hor_out)
+    down_out = KL.MaxPooling2D(pool_size=(2, 2))(hor_out)
+    return hor_out, down_out
+
+def floor(down_in, filters):
+    conv = KL.Conv2D(filters, 3, activation='relu', padding='same', kernel_initializer='he_normal')(down_in)
+    conv = KL.Conv2D(filters, 3, activation='relu', padding='same', kernel_initializer='he_normal')(conv)
+    up_in = KL.Dropout(0.5)(conv)
+    return up_in
+
+def up_with(up_in, hor_in, filters):
+    up = KL.Conv2D(filters, 2, activation='relu', padding='same', kernel_initializer='he_normal')(KL.UpSampling2D(size=(2, 2))(up_in))
+    merge = KB.concatenate([hor_in, up])
+    up_out = KL.Conv2D(filters, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge)
+    up_out = KL.Conv2D(filters, 3, activation='relu', padding='same', kernel_initializer='he_normal')(up_out)
+    return up_out
+
 class UnetBuilder(object):
     @staticmethod
-    def unet(input_size = (256,256,1)):
-        inputs = Input(input_size)
-        conv1 = KL.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(inputs)
-        conv1 = KL.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv1)
-        pool1 = KL.MaxPooling2D(pool_size=(2, 2))(conv1)
+    def unet(input_size=(256, 256, 1)):
+        inputs = KL.Input(input_size)
+        down = inputs
+        # Down
+        hor_1, down = down_with(down, 64)
+        hor_2, down = down_with(down, 128)
+        hor_3, down = down_with(down, 256)
+        hor_4, down = down_with(down, 512, droping=True)
 
-        conv2 = KL.Conv2D(128, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool1)
-        conv2 = KL.Conv2D(128, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv2)
-        pool2 = KL.MaxPooling2D(pool_size=(2, 2))(conv2)
+        # Floor
+        up = floor(down, 1024)
+        # Up
+        up = up_with(up, hor_4, 512)
+        up = up_with(up, hor_3, 256)
+        up = up_with(up, hor_2, 128)
+        up = up_with(up, hor_1, 64)
 
-        conv3 = KL.Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool2)
-        conv3 = KL.Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv3)
-        pool3 = KL.MaxPooling2D(pool_size=(2, 2))(conv3)
+        outputs = KL.Conv2D(2, 3, activation='relu', padding='same', kernel_initializer='he_normal')(up)
+        outputs = KL.Conv2D(1, 1, activation='sigmoid')(outputs)
 
-        conv4 = KL.Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool3)
-        conv4 = KL.Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv4)
-        drop4 = KL.Dropout(0.5)(conv4)
-        pool4 = KL.MaxPooling2D(pool_size=(2, 2))(drop4)
-
-        conv5 = KL.Conv2D(1024, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(pool4)
-        conv5 = KL.Conv2D(1024, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv5)
-        drop5 = KL.Dropout(0.5)(conv5)
-
-        up6 = KL.Conv2D(512, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(drop5))
-
-        merge6 = KB.concatenate([drop4,up6])
-        conv6 = KL.Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge6)
-        conv6 = KL.Conv2D(512, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv6)
-
-        up7 = KL.Conv2D(256, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(conv6))
-        merge7 = KB.concatenate([conv3,up7])
-        conv7 = KL.Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge7)
-        conv7 = KL.Conv2D(256, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv7)
-
-        up8 = KL.Conv2D(128, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(conv7))
-        merge8 = KB.concatenate([conv2,up8])
-        conv8 = KL.Conv2D(128, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge8)
-        conv8 = KL.Conv2D(128, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv8)
-
-        up9 = KL.Conv2D(64, 2, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(UpSampling2D(size = (2,2))(conv8))
-        merge9 = KB.concatenate([conv1,up9])
-        conv9 = KL.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(merge9)
-        conv9 = KL.Conv2D(64, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9)
-        conv9 = KL.Conv2D(2, 3, activation = 'relu', padding = 'same', kernel_initializer = 'he_normal')(conv9)
-        conv10 = KL.Conv2D(1, 1, activation = 'sigmoid')(conv9)
-
-        model = KM.Model(input = inputs, output = conv10)
+        model = KM.Model(inputs=inputs, outputs=outputs)
 
         #model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
         #model.summary()

@@ -7,7 +7,7 @@ KB = tf.keras.backend
 KU = tf.keras.utils
 KR = tf.keras.regularizers
 
-def down_rsu_with(rsu,down_in,pooling=True):
+def down_rsu_with(rsu, down_in, pooling=True):
     hor_out = rsu(down_in)
     if pooling:
         down_out = KL.MaxPool2D(pool_size=2, strides=2)(hor_out)
@@ -43,11 +43,11 @@ class U2netBuilder(object):
         x = KL.Input(shape=input_shape, name='image')
         down_x = x
         # Down！
-        hor_x_0, down_x = down_rsu_with(RSU.RSU7(filters=64, mid_filters=32), down_x);
-        hor_x_1, down_x = down_rsu_with(RSU.RSU6(filters=128, mid_filters=32), down_x);
-        hor_x_2, down_x = down_rsu_with(RSU.RSU5(filters=256, mid_filters=64), down_x);
-        hor_x_3, down_x = down_rsu_with(RSU.RSU4(filters=512, mid_filters=128), down_x);
-        hor_x_4, down_x = down_rsu_with(RSU.RSU4F(filters=512, mid_filters=256), down_x);
+        hor_x_0, down_x = down_rsu_with(RSU.RSU7(filters=64, mid_filters=32), down_x)
+        hor_x_1, down_x = down_rsu_with(RSU.RSU6(filters=128, mid_filters=32), down_x)
+        hor_x_2, down_x = down_rsu_with(RSU.RSU5(filters=256, mid_filters=64), down_x)
+        hor_x_3, down_x = down_rsu_with(RSU.RSU4(filters=512, mid_filters=128), down_x)
+        hor_x_4, down_x = down_rsu_with(RSU.RSU4F(filters=512, mid_filters=256), down_x)
 
         # Floor！
         side_floor, up_x = floor_rsu(RSU.RSU4F(filters=512, mid_filters=256), down_x, up_down_f - 0, side_c)
@@ -74,7 +74,7 @@ class U2netBuilder(object):
 
         # 拼到一起输出,应当也可以！！！
         side_out = KL.concatenate([side_out, side_0, side_1, side_2, side_3, side_4, side_5], name='side_all')
-        model = KM.Model(inputs=x, outputs= side_out)
+        model = KM.Model(inputs=x, outputs=side_out)
 
         # MultiOutputs,这是作者的方式！
         # model = KM.Model(inputs=x, outputs=[side_out, side_0, side_1, side_2, side_3, side_4, side_5])
@@ -89,15 +89,15 @@ class U2netBuilder(object):
         down_x = x
 
         # Down flow！
-        hor_x_0, down_x = down_rsu_with(RSU.RSU7(filters=64, mid_filters=16), down_x);
-        hor_x_1, down_x = down_rsu_with(RSU.RSU6(filters=64, mid_filters=16), down_x);
-        hor_x_2, down_x = down_rsu_with(RSU.RSU5(filters=64, mid_filters=16), down_x);
-        hor_x_3, down_x = down_rsu_with(RSU.RSU4(filters=64, mid_filters=16), down_x);
-        hor_x_4, down_x = down_rsu_with(RSU.RSU4F(filters=64, mid_filters=16), down_x);
+        hor_x_0, down_x = down_rsu_with(RSU.RSU7(filters=64, mid_filters=16), down_x)
+        hor_x_1, down_x = down_rsu_with(RSU.RSU6(filters=64, mid_filters=16), down_x)
+        hor_x_2, down_x = down_rsu_with(RSU.RSU5(filters=64, mid_filters=16), down_x)
+        hor_x_3, down_x = down_rsu_with(RSU.RSU4(filters=64, mid_filters=16), down_x)
+        hor_x_4, down_x = down_rsu_with(RSU.RSU4F(filters=64, mid_filters=16), down_x)
 
         # Floor flow！
         side_floor, up_x = floor_rsu(RSU.RSU4F(filters=64, mid_filters=16), down_x, up_down_f - 0, side_c)
-        side_5 = side_floor # Just for reading!!!
+        side_5 = side_floor  # Just for reading!!!
 
         # Up flow！
         side_4, up_x = up_rsu_with(RSU.RSU4F(filters=64, mid_filters=16), hor_x_4, up_x, up_down_f - 1, side_c)
@@ -120,7 +120,7 @@ class U2netBuilder(object):
 
         # 拼到一起输出,应当也可以！！！
         side_out = KL.concatenate([side_out, side_0, side_1, side_2, side_3, side_4, side_5], name='side_all')
-        model = KM.Model(inputs=x, outputs= side_out)
+        model = KM.Model(inputs=x, outputs=side_out)
 
         # MultiOutputs,这是作者的方式！
         # model = KM.Model(inputs=x, outputs=[side_out, side_0, side_1, side_2, side_3, side_4, side_5])
