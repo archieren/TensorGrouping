@@ -52,6 +52,8 @@ def floor_RBC(rbc, down_in):
     up_out = rbc(down_in)
     return up_out
 
+def residual(x, u_x):
+    return KL.add([x, u_x])
 
 class RSU7(KL.Layer):
     """
@@ -95,7 +97,7 @@ class RSU7(KL.Layer):
         up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_2, up_x)
         up_x = up_RBC_with(relu_bn_conv(filters=self.filters), hor_x_1, up_x, upsampling=False)
 
-        return hor_x_0+up_x
+        return residual(hor_x_0, up_x)
 
 class RSU6(KL.Layer):
     """
@@ -137,7 +139,7 @@ class RSU6(KL.Layer):
         up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_2, up_x)
         up_x = up_RBC_with(relu_bn_conv(filters=self.filters), hor_x_1, up_x, upsampling=False)
 
-        return hor_x_0+up_x
+        return residual(hor_x_0, up_x)
 
 
 class RSU5(KL.Layer):
@@ -178,7 +180,7 @@ class RSU5(KL.Layer):
         up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_2, up_x)
         up_x = up_RBC_with(relu_bn_conv(filters=self.filters), hor_x_1, up_x, upsampling=False)
 
-        return hor_x_0+up_x
+        return residual(hor_x_0, up_x)
 
 class RSU4(KL.Layer):
     """
@@ -216,7 +218,7 @@ class RSU4(KL.Layer):
         up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters), hor_x_2, up_x)
         up_x = up_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), hor_x_1, up_x, upsampling=False)
 
-        return hor_x_0+up_x
+        return residual(hor_x_0, up_x)
 
 class RSU4F(KL.Layer):
     """
@@ -255,4 +257,4 @@ class RSU4F(KL.Layer):
         up_x = up_RBC_with(relu_bn_conv(filters=self.mid_filters, dilation_rate=2), hor_x_2, up_x, upsampling=False)
         up_x = up_RBC_with(relu_bn_conv(filters=self.filters, dilation_rate=1), hor_x_1, up_x, upsampling=False)
 
-        return hor_x_0+up_x
+        return residual(hor_x_0, up_x)

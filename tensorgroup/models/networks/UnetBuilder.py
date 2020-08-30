@@ -23,7 +23,7 @@ def floor(down_in, filters):
 
 def up_with(up_in, hor_in, filters):
     up = KL.Conv2D(filters, 2, activation='relu', padding='same', kernel_initializer='he_normal')(KL.UpSampling2D(size=(2, 2))(up_in))
-    merge = KB.concatenate([hor_in, up])
+    merge = KL.concatenate([hor_in, up])
     up_out = KL.Conv2D(filters, 3, activation='relu', padding='same', kernel_initializer='he_normal')(merge)
     up_out = KL.Conv2D(filters, 3, activation='relu', padding='same', kernel_initializer='he_normal')(up_out)
     return up_out
@@ -31,6 +31,7 @@ def up_with(up_in, hor_in, filters):
 class UnetBuilder(object):
     @staticmethod
     def unet(input_size=(256, 256, 1)):
+        # In
         inputs = KL.Input(input_size)
         down = inputs
         # Down
@@ -38,7 +39,6 @@ class UnetBuilder(object):
         hor_2, down = down_with(down, 128)
         hor_3, down = down_with(down, 256)
         hor_4, down = down_with(down, 512, droping=True)
-
         # Floor
         up = floor(down, 1024)
         # Up
@@ -46,12 +46,12 @@ class UnetBuilder(object):
         up = up_with(up, hor_3, 256)
         up = up_with(up, hor_2, 128)
         up = up_with(up, hor_1, 64)
-
+        # Out
         outputs = KL.Conv2D(2, 3, activation='relu', padding='same', kernel_initializer='he_normal')(up)
         outputs = KL.Conv2D(1, 1, activation='sigmoid')(outputs)
 
         model = KM.Model(inputs=inputs, outputs=outputs)
 
-        #model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
-        #model.summary()
+        # model.compile(optimizer = Adam(lr = 1e-4), loss = 'binary_crossentropy', metrics = ['accuracy'])
+        # model.summary()
         return model
