@@ -16,3 +16,8 @@ model.summary()
 
 model = UB.UnetBuilder.unet()
 model.summary()
+
+x = KL.Input(shape=(None, None, 3), name='image')
+model = U2B.U_2_Net(side_c=3, is_simple=True)
+y = model(x)
+model.summary()

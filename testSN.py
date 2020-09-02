@@ -3,7 +3,7 @@ import os
 import datetime
 
 from tensorgroup.models.networks.layers.sn import SpectralNormalization
-from tensorgroup.models.networks.layers.sa import Attention
+from tensorgroup.models.networks.layers.sa import Attention, SN_Attention
 
 K  = tf.keras
 KA = tf.keras.applications
@@ -34,7 +34,7 @@ inputs = KL.Input(shape=(28,28,1), dtype=tf.float32)
 
 x = SpectralNormalization(KL.Conv2D(32, (3, 3), activation='relu'))(inputs)
 x = KL.MaxPooling2D((2, 2))(x)
-x = Attention(32)(x)
+x = SN_Attention(32)(x)
 x = SpectralNormalization(KL.Conv2D(64, (3, 3), activation='relu'))(x)
 x = KL.MaxPooling2D((2, 2))(x)
 x = KL.Flatten()(x)
