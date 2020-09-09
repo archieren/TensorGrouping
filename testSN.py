@@ -3,9 +3,9 @@ import os
 import datetime
 
 from tensorgroup.models.networks.layers.sn import SpectralNormalization
-from tensorgroup.models.networks.layers.sa import Attention, SN_Attention
+from tensorgroup.models.networks.layers.sa import SN_Attention
 
-K  = tf.keras
+K = tf.keras
 KA = tf.keras.applications
 KL = tf.keras.layers
 KO = tf.keras.optimizers
@@ -18,7 +18,7 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 batch_size = 200
 buffer_size = 2000
-num_epochs = 20 # 200
+num_epochs = 20  # 200
 
 (train_images, train_labels), (_, _) = KD.mnist.load_data()
 
@@ -30,7 +30,7 @@ train_labels = train_labels.astype('float32')
 train_dataset = tf.data.Dataset.from_tensor_slices((train_images, train_labels)).shuffle(buffer_size).batch(batch_size)
 
 
-inputs = KL.Input(shape=(28,28,1), dtype=tf.float32)
+inputs = KL.Input(shape=(28, 28, 1), dtype=tf.float32)
 
 x = SpectralNormalization(KL.Conv2D(32, (3, 3), activation='relu'))(inputs)
 x = KL.MaxPooling2D((2, 2))(x)
@@ -49,7 +49,7 @@ def loss(model, x, y):
 
 def grad(model, inputs, targets):
     with tf.GradientTape() as tape:
-      loss_value = loss(model, inputs, targets)
+        loss_value = loss(model, inputs, targets)
     return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
 
@@ -73,7 +73,7 @@ if latest is not None:
     model.load_weights(latest)
 
 
-####################################################################################By Fit
+# By Fit
 """
 log_dir=os.path.join(os.getcwd(), 'work','testSN', 'log', 'fit', datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 if not os.path.exists(log_dir):  os.makedirs(log_dir)
@@ -84,10 +84,10 @@ model.fit(train_dataset, epochs=num_epochs, callbacks=[cp_callback, tensorboard_
 model.save(os.path.join(saved_model_dir, 'testSN.h5'))
 """
 ####################################################################################
-train_log_dir =os.path.join(os.getcwd(), 'work','testSN', 'log', 'gradient_tape', datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), 'train')
-#test_log_dir =os.path.join(os.getcwd(), 'work','testSN', 'log', 'gradient_tape', datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), 'test')
+train_log_dir = os.path.join(os.getcwd(), 'work', 'testSN', 'log', 'gradient_tape', datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), 'train')
+# test_log_dir =os.path.join(os.getcwd(), 'work','testSN', 'log', 'gradient_tape', datetime.datetime.now().strftime("%Y%m%d-%H%M%S"), 'test')
 train_summary_writer = tf.summary.create_file_writer(train_log_dir)
-#test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+# test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
 for epoch in range(num_epochs):
     train_epoch_loss = tf.keras.metrics.Mean()
@@ -109,4 +109,3 @@ for epoch in range(num_epochs):
 
     train_epoch_loss.reset_states()
     train_epoch_accuracy.reset_states()
-
