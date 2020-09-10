@@ -17,11 +17,20 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 builder = DCGANBuilder()
 
-D = builder.D(name='Dis', is_sn=True)
+D = builder.D(name='Dis', is_sn=False)
 D.summary()
+
+T = builder.D(name='TE', is_te=True)
+T.summary()
 
 E = builder.E(name='Enc')
 E.summary()
 
 G = builder.G(name='Gen')
 G.summary()
+
+AE = builder.AE(name='AE')
+AE.summary()
+
+VAE = builder.AE(name='VAE', is_vae=True)
+VAE.summary()
