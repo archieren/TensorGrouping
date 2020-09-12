@@ -44,7 +44,16 @@ class SpectralNormalization(tf.keras.layers.Wrapper):
 
         super(SpectralNormalization, self).build()
 
-    def call(self, inputs, training=True):
+    def call(self, inputs, training=None):
+        """
+        Args:
+            inputs: ...
+            training: 这是个神秘的参数。设置为None,表示由系统决定。
+        Returns:
+            ......
+        """
+        if training is None:
+            training = KB.learning_phase()
         if training:
             self.update_weights()
         output = self.layer(inputs)

@@ -127,7 +127,10 @@ class SN_Attention(KL.Layer):
         else:
             return s_kernel
 
-    def call(self, x, training=True):
+    def call(self, x, training=None):
+        if training is None:
+            training = KB.learning_phase()
+
         def hw_flatten(x):
             return KB.reshape(x, shape=[KB.shape(x)[0], KB.shape(x)[1]*KB.shape(x)[2], KB.shape(x)[-1]])
 
