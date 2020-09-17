@@ -213,7 +213,7 @@ class BagnetBuilder(object):
         return model
 
     @staticmethod
-    def build_bagnet_9(input_shape=(9, 9, 3), num_outputs=1000):
+    def build_bagnet_9(input_shape=(None, None, 3), num_outputs=1000): # input_shape=(9, 9, 3)
         return BagnetBuilder.build(input_shape,
                                    # bottleneck,
                                    repetitions=[3, 4, 6, 3],
@@ -222,7 +222,7 @@ class BagnetBuilder(object):
                                    num_outputs=num_outputs)
 
     @staticmethod
-    def build_bagnet_17(input_shape=(17, 17, 3), num_outputs=1000):
+    def build_bagnet_17(input_shape=(None, None, 3), num_outputs=1000): # input_shape=(17, 17, 3)
         return BagnetBuilder.build(input_shape,
                                    # bottleneck,
                                    repetitions=[3, 4, 23, 3],
@@ -231,7 +231,7 @@ class BagnetBuilder(object):
                                    num_outputs=num_outputs)
 
     @staticmethod
-    def build_bagnet_33(input_shape=(33, 33, 3), num_outputs=1000):
+    def build_bagnet_33(input_shape=(None, None, 3), num_outputs=1000):  # input_shape=(33, 33, 3)
         return BagnetBuilder.build(input_shape,
                                    # bottleneck,
                                    repetitions=[3, 8, 36, 3],

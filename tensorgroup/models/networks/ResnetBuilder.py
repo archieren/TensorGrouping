@@ -15,14 +15,14 @@ CHANNEL_AXIS = 3
 
 
 def _bn_relu(input):
-    """Helper to build a BN -> relu block
+    """Helper to build a BN -> relu block: relu(BN)
     """
     norm = KL.BatchNormalization(axis=CHANNEL_AXIS)(input)
     return KL.Activation("relu")(norm)
 
 
 def _conv_bn_relu(**conv_params):
-    """Helper to build a conv -> BN -> relu block
+    """Helper to build a conv -> BN -> relu block: relu(BN(conv))
     """
     filters = conv_params["filters"]
     kernel_size = conv_params["kernel_size"]
@@ -42,7 +42,7 @@ def _conv_bn_relu(**conv_params):
 
 
 def _bn_relu_conv(**conv_params):
-    """Helper to build a BN -> relu -> conv block.
+    """Helper to build a BN -> relu -> conv block: conv(relu(BN))
     This is an improved scheme proposed in http://arxiv.org/pdf/1603.05027v2.pdf
     """
     filters = conv_params["filters"]
