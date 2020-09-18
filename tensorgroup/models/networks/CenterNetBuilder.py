@@ -204,27 +204,32 @@ class CenterNetBuilder(object):
         # decoder
         num_filters = [256, 128, 64]
         for nf in num_filters:  # (2**len(num_filters))*ResNetOutputSize = CenterNetOutputSize
-            x = KL.Conv2DTranspose(nf, kernel_size=(4, 4), strides=2, use_bias=False, padding='same', kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(x)
+            # 1. Use a simple convolution instead of a deformable convolution
+            x = KL.Conv2D(nf, kernel_size=3, strides=1, padding='same')(x)
+            x = KL.BatchNormalization()(x)
+            x = KL.ReLU()(x)
+            #
+            x = KL.Conv2DTranspose(nf, kernel_size=3, strides=2, padding='same')(x)
             x = KL.BatchNormalization()(x)
             x = KL.ReLU()(x)
 
         # hm header
-        y1 = KL.Conv2D(64, 3, padding='same', use_bias=False, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(x)
+        y1 = KL.Conv2D(64, 3, padding='same')(x)
         y1 = KL.BatchNormalization()(y1)
         y1 = KL.ReLU()(y1)
-        y1 = KL.Conv2D(num_classes, 1, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4), activation='sigmoid')(y1)
+        y1 = KL.Conv2D(num_classes, 1, activation='sigmoid')(y1)
 
         # wh header -- shape
-        y2 = KL.Conv2D(64, 3, padding='same', use_bias=False, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(x)
+        y2 = KL.Conv2D(64, 3, padding='same')(x)
         y2 = KL.BatchNormalization()(y2)
         y2 = KL.ReLU()(y2)
-        y2 = KL.Conv2D(2, 1, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(y2)
+        y2 = KL.Conv2D(2, 1)(y2)
 
         # reg header -- center_offset
-        y3 = KL.Conv2D(64, 3, padding='same', use_bias=False, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(x)
+        y3 = KL.Conv2D(64, 3, padding='same')(x)
         y3 = KL.BatchNormalization()(y3)
         y3 = KL.ReLU()(y3)
-        y3 = KL.Conv2D(2, 1, kernel_initializer='he_normal', kernel_regularizer=KR.l2(5e-4))(y3)
+        y3 = KL.Conv2D(2, 1)(y3)
 
         loss_ = KL.Lambda(loss, name='loss_as_output')([y1, y2, y3, ck_hm_input, ck_mask_input, shape_input, center_offset_input, indices_input, indices_mask_input])
         train_model = KM.Model(inputs=[image_input, indices_input, indices_mask_input, center_offset_input, shape_input, ck_hm_input, ck_mask_input], outputs=[loss_])
