@@ -191,28 +191,15 @@ class CenterNetBuilder(object):
         indices_input = KL.Input(shape=(max_objects, 2), dtype=tf.int64, name='indices_pos')
         indices_mask_input = KL.Input(shape=(max_objects, 1), name='indices_mask')
 
-        # resnet = KA.ResNet50V2(weights='imagenet',
-        #                        input_tensor=image_input,  # KL.Input(shape=(32*16, 32*16, 3) # 32*ResNetOutputSize = Inputsize
-        #                        include_top=False)
         resnet = RB.ResnetBuilder.build_resnet_50(image_input, 0, include_top=True)
         # resnet.summary()
         # (b, 16, 16, 2048)
-        C5 = resnet.output
-        # C5 = resnet.outputs[-1]
-
-        x = KL.Dropout(rate=0.5)(C5)
-        # decoder
-        num_filters = [256, 128, 64]
-        for nf in num_filters:  # (2**len(num_filters))*ResNetOutputSize = CenterNetOutputSize
-            # 1. Use a simple convolution instead of a deformable convolution
-            x = KL.Conv2D(nf, kernel_size=3, strides=1, padding='same')(x)
-            x = KL.BatchNormalization()(x)
-            x = KL.ReLU()(x)
-            #
-            x = KL.Conv2DTranspose(nf, kernel_size=3, strides=2, padding='same')(x)
-            x = KL.BatchNormalization()(x)
-            x = KL.ReLU()(x)
-
+        resnet = resnet.output
+        x = KL.Dropout(rate=0.5)(resnet)
+        # 32*ResNetOutputSize = input_size
+        # 生成feature_map
+        x = CenterNetBuilder.make_deconv_layers(num_layers=3, num_filters=[256, 128, 64])(x)
+        # (2**num_layers)*ResNetOutputSize = CenterNetOutputSize
         # hm header
         y1 = KL.Conv2D(64, 3, padding='same')(x)
         y1 = KL.BatchNormalization()(y1)
@@ -244,3 +231,21 @@ class CenterNetBuilder(object):
         prediction_model = KM.Model(inputs=image_input, outputs=detections)
         debug_model = KM.Model(inputs=image_input, outputs=[y1, y2, y3])
         return train_model, prediction_model, debug_model
+
+    @staticmethod
+    def make_deconv_layers(num_layers=5, num_filters=[512, 256, 128, 64, 32]):
+        assert num_layers == len(num_filters), 'ERROR: num_deconv_layers is different len(num_deconv_filters)'
+
+        def f(input):
+            for i in range(num_layers):
+                nf = num_filters[i]
+                # 1. Use a simple convolution instead of a deformable convolution
+                input = KL.Conv2D(filters=nf, kernel_size=3, strides=1, padding='same')(input)
+                input = KL.BatchNormalization()(input)
+                input = KL.ReLU()(input)
+                # 2. Use kernel_size=3, use_bias=True... which are different from oringinal kernel_size=4, use_bias=False...
+                input = KL.Convolution2DTranspose(filters=nf, kernel_size=3, padding="same", strides=2)(input)
+                input = KL.BatchNormalization()(input)
+                input = KL.ReLU()(input)
+            return input
+        return f

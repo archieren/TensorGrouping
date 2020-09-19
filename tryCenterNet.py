@@ -136,7 +136,7 @@ def train():
     latest = tf.train.latest_checkpoint(checkpoint_dir)
     if latest is not None:
         train_model.load_weights(latest)
-    train_model.fit(dataset(centernet_input_config), epochs=1, callbacks=[cp_callback])
+    train_model.fit(dataset(centernet_input_config), epochs=1000, callbacks=[cp_callback])
     train_model.save(os.path.join(saved_model_dir, 'tiexie_model.h5'))
 
 def load_image(image_index):
@@ -190,8 +190,5 @@ if __name__ == '__main__':
     # tf.executing_eagerly()
     # make_voc_custom_dataset()
     # about_dataset_voc_custom()
-    # test_gather()
-    # test_meshgrid()
-    # test_gengaussian()
-    train()
-    # predict()
+    # train()
+    predict()

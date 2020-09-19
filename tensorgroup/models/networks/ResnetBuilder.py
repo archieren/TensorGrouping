@@ -159,7 +159,7 @@ class ResnetBuilder(object):
 
         Args:
             input: Must have the shape as below!
-            input_shape: The input shape in the form (nb_channels, nb_rows, nb_cols)
+                input_shape: The input shape in the form (nb_rows, nb_cols, nb_channels)
             num_outputs: The number of outputs at final softmax layer
             block_fn: The block function to use. This is either `basic_block` or `bottleneck`.
                 The original paper used basic_block for layers < 50
