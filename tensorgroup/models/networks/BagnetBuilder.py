@@ -65,7 +65,7 @@ def _bn_relu_conv(**conv_params):
     return f
 
 
-def _shortcut(input, residual):
+def _shortcut(input, residual, shortcut_strides):
     """Adds a shortcut between input and residual block and merges them with "sum"
     """
     # Expand channels of shortcut to match residual.
@@ -74,18 +74,18 @@ def _shortcut(input, residual):
     input_shape = KB.int_shape(input)
     residual_shape = KB.int_shape(residual)
     # print("{}.{}".format(input_shape,residual_shape))
-    stride_width = int(round(input_shape[ROW_AXIS] / residual_shape[ROW_AXIS]))
-    stride_height = int(round(input_shape[COL_AXIS] / residual_shape[COL_AXIS]))
+    # stride_width = int(round(input_shape[ROW_AXIS] / residual_shape[ROW_AXIS]))
+    # stride_height = int(round(input_shape[COL_AXIS] / residual_shape[COL_AXIS]))
     equal_channels = input_shape[CHANNEL_AXIS] == residual_shape[CHANNEL_AXIS]
 
     shortcut = input
     # 1 X 1 conv if shape is different. Else identity.
     # In the first bottleneck of each _residual_block, this will be in case !
     # 每一残差块的第一个瓶颈层，会出现这种情况？
-    if stride_width > 1 or stride_height > 1 or not equal_channels:
+    if shortcut_strides > 1 or not equal_channels:
         shortcut = KL.Conv2D(filters=residual_shape[CHANNEL_AXIS],
                              kernel_size=(1, 1),
-                             strides=(stride_width, stride_height),
+                             strides=shortcut_strides,
                              padding="valid",
                              kernel_initializer="he_normal",
                              kernel_regularizer=KR.l2(0.0001))(input)
@@ -119,6 +119,7 @@ def _conv_bn_residual_relu(**conv_params):
     filters = conv_params["filters"]
     kernel_size = conv_params["kernel_size"]
     strides = conv_params.setdefault("strides", (1, 1))
+    shortcut_strides = conv_params.setdefault("shortcut_strides", (1, 1))
     kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
     padding = conv_params.setdefault("padding", "valid")
     kernel_regularizer = conv_params.setdefault("kernel_regularizer", KR.l2(1.e-4))
@@ -129,7 +130,7 @@ def _conv_bn_residual_relu(**conv_params):
                          kernel_initializer=kernel_initializer,
                          kernel_regularizer=kernel_regularizer)(input)
         norm = KL.BatchNormalization(axis=CHANNEL_AXIS)(conv)
-        residual = _shortcut(init_input, norm)
+        residual = _shortcut(init_input, norm, shortcut_strides)
 
         return KL.Activation("relu")(residual)
 
@@ -149,7 +150,7 @@ def bottleneck(filters, is_kernel_3=False, k3_stride=1):
 
         conv_1_1 = _conv_bn_relu(filters=filters, kernel_size=(1, 1))(input)
         conv_3_3 = _conv_bn_relu(filters=filters, kernel_size=(k3_size, k3_size), strides=(k3_stride, k3_stride))(conv_1_1)
-        residual = _conv_bn_residual_relu(input=input, filters=filters * 4, kernel_size=(1, 1))(conv_3_3)
+        residual = _conv_bn_residual_relu(input=input, filters=filters * 4, kernel_size=(1, 1), shortcut_strides=k3_stride)(conv_3_3)
         return residual  # _shortcut(input, residual)
 
     return f
@@ -162,6 +163,8 @@ class BagnetBuilder(object):
 
         Args:
             input_shape: The input shape in the form (nb_rows, nb_cols, nb_channels)
+                一般来理解的话，定义时用(None, None, 3).
+                 那么推理时，指定(9, 9, 3) 、(17, 17, 3) 、(33, 33, 3)。
             num_outputs: The number of outputs at final softmax layer
             repetitions: Number of repetitions of various block units.
                 At each block unit, the number of filters are doubled and the input size is halved
@@ -213,7 +216,7 @@ class BagnetBuilder(object):
         return model
 
     @staticmethod
-    def build_bagnet_9(input_shape=(None, None, 3), num_outputs=1000):  # input_shape=(9, 9, 3)
+    def build_bagnet_9(input_shape=(224, 224, 3), num_outputs=1000):  # input_shape=(9, 9, 3)
         return BagnetBuilder.build(input_shape,
                                    # bottleneck,
                                    repetitions=[3, 4, 6, 3],

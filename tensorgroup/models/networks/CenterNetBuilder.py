@@ -191,7 +191,7 @@ class CenterNetBuilder(object):
         indices_input = KL.Input(shape=(max_objects, 2), dtype=tf.int64, name='indices_pos')
         indices_mask_input = KL.Input(shape=(max_objects, 1), name='indices_mask')
 
-        resnet = RB.ResnetBuilder.build_resnet_50(image_input, 0, include_top=True)
+        resnet = RB.ResnetBuilder.build_resnet_50(image_input, 0, include_top=False)
         # resnet.summary()
         # (b, 16, 16, 2048)
         resnet = resnet.output

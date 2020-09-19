@@ -42,7 +42,7 @@ class ResnetKeypointBuilder(object):
         if resnet_depth not in depth_switch:
             return None
         resnet_builder = depth_switch[resnet_depth]
-        resnet = resnet_builder(input, 0, include_top=True)
+        resnet = resnet_builder(input, 0, include_top=False)
         #
         x = resnet.output
         x = KL.Dropout(rate=0.5)(x)
