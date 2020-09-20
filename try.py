@@ -4,12 +4,12 @@ import numpy as np
 import skimage.io as io
 import cv2
 
-from pycocotools.coco import COCO
+# from pycocotools.coco import COCO
 
 from matplotlib import pyplot as plt
 
 import tensorflow as tf
-import tensorflow_datasets as tfds
+# import tensorflow_datasets as tfds
 
 
 from tensorgroup.models.networks.ResnetKeypointBuilder import ResnetKeypointBuilder as RKB

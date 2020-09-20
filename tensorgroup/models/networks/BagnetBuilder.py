@@ -163,8 +163,7 @@ class BagnetBuilder(object):
 
         Args:
             input_shape: The input shape in the form (nb_rows, nb_cols, nb_channels)
-                一般来理解的话，定义时用(None, None, 3).
-                 那么推理时，指定(9, 9, 3) 、(17, 17, 3) 、(33, 33, 3)。
+                一般来理解的话，定义时用(None, None, 3),训练时用(224, 224, 3), 推理时，指定(9, 9, 3) 、(17, 17, 3) 、(33, 33, 3)。
             num_outputs: The number of outputs at final softmax layer
             repetitions: Number of repetitions of various block units.
                 At each block unit, the number of filters are doubled and the input size is halved
@@ -205,18 +204,19 @@ class BagnetBuilder(object):
         # block = _bn_relu(block) # 没必要了！
 
         # Classifier block
-        block_shape = KB.int_shape(block)
-        pool2 = KL.AveragePooling2D(pool_size=(block_shape[ROW_AXIS], block_shape[COL_AXIS]),
-                                    strides=(1, 1))(block)
-        flatten1 = KL.Flatten()(pool2)
+        # 对于BagNet,我始终没明白的是按224训练,按9\17\33来使用,是如何用下面的方法做到的.故我将它换成GlobalAvgPool2D以适应输入形式的可变性.
+        # block_shape = KB.int_shape(block)
+        # pool2 = KL.AveragePooling2D(pool_size=(block_shape[ROW_AXIS], block_shape[COL_AXIS]), strides=(1, 1))(block)
+        # flatten1 = KL.Flatten(pool2)
+        pool2 = KL.GlobalAvgPool2D()(block)
         dense = KL.Dense(units=num_outputs, kernel_initializer="he_normal",
-                         activation="softmax")(flatten1)
+                         activation="softmax")(pool2)
 
         model = KM.Model(inputs=input, outputs=dense)
         return model
 
     @staticmethod
-    def build_bagnet_9(input_shape=(224, 224, 3), num_outputs=1000):  # input_shape=(9, 9, 3)
+    def build_bagnet_9(input_shape=(None, None, 3), num_outputs=1000):  # input_shape=(9, 9, 3)
         return BagnetBuilder.build(input_shape,
                                    # bottleneck,
                                    repetitions=[3, 4, 6, 3],
