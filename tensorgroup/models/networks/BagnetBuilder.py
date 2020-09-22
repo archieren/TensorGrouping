@@ -17,85 +17,37 @@ CHANNEL_AXIS = 3
 # 1) 残差网中,padding用的都是"same",而不是这的"valid"
 # 2) 修改了shortcut里的内容，参照作者pytorch的实现！
 
-def _bn_relu(input):
-    """Helper to build a BN -> relu block
-    """
-    norm = KL.BatchNormalization(axis=CHANNEL_AXIS)(input)
-    return KL.Activation("relu")(norm)
+# 这个padding参数很奇怪，导致我总认为BagNet这篇论文有点在造数据！！？？
+_PAD = "same"
 
 
-def _conv_bn_relu(**conv_params):
-    """Helper to build a conv -> BN -> relu block
-    """
-    filters = conv_params["filters"]
-    kernel_size = conv_params["kernel_size"]
-    strides = conv_params.setdefault("strides", (1, 1))
-    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
-    padding = conv_params.setdefault("padding", "valid")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", KR.l2(1.e-4))
-
+def _bottleneck(filters, is_k3=False, downsample_stride=1):
     def f(input):
-        conv = KL.Conv2D(filters=filters, kernel_size=kernel_size,
-                         strides=strides, padding=padding,
-                         kernel_initializer=kernel_initializer,
-                         kernel_regularizer=kernel_regularizer)(input)
-        return _bn_relu(conv)
+        # assert filters == KB.int_shape(input)[CHANNEL_AXIS]
 
+        k3_size = 1 if not is_k3 else 3
+
+        conv_1 = KL.Conv2D(filters, 1)(input)
+        bn_1 = KL.BatchNormalization()(conv_1)
+        relu_1 = KL.Activation("relu")(bn_1)
+
+        conv_2 = KL.Conv2D(filters, kernel_size=k3_size, strides=downsample_stride, padding=_PAD, use_bias=False)(relu_1)
+        bn_2 = KL.BatchNormalization()(conv_2)
+        relu_2 = KL.Activation("relu")(bn_2)
+
+        conv_3 = KL.Conv2D(filters*4, 1, use_bias=False)(relu_2)
+        bn_3 = KL.BatchNormalization()(conv_3)
+
+        shortcut = KL.Conv2D(filters*4, 1, strides=downsample_stride, padding=_PAD, use_bias=False)(input)
+        shortcut_bn = KL.BatchNormalization()(shortcut)
+
+        residual = KL.Add()([shortcut_bn, bn_3])
+        relu_3 = KL.Activation("relu")(residual)
+
+        return relu_3
     return f
 
-
-def _bn_relu_conv(**conv_params):
-    """Helper to build a BN -> relu -> conv block.
-    This is an improved scheme proposed in http://arxiv.org/pdf/1603.05027v2.pdf
-    """
-    filters = conv_params["filters"]
-    kernel_size = conv_params["kernel_size"]
-    strides = conv_params.setdefault("strides", (1, 1))
-    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
-    padding = conv_params.setdefault("padding", "valid")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", KR.l2(1.e-4))
-
-    def f(input):
-        activation = _bn_relu(input)
-        return KL.Conv2D(filters=filters, kernel_size=kernel_size,
-                         strides=strides, padding=padding,
-                         kernel_initializer=kernel_initializer,
-                         kernel_regularizer=kernel_regularizer)(activation)
-
-    return f
-
-
-def _shortcut(input, residual, shortcut_strides):
-    """Adds a shortcut between input and residual block and merges them with "sum"
-    """
-    # Expand channels of shortcut to match residual.
-    # Stride appropriately to match residual (width, height)
-    # Should be int if network architecture is correctly configured.
-    input_shape = KB.int_shape(input)
-    residual_shape = KB.int_shape(residual)
-    # print("{}.{}".format(input_shape,residual_shape))
-    # stride_width = int(round(input_shape[ROW_AXIS] / residual_shape[ROW_AXIS]))
-    # stride_height = int(round(input_shape[COL_AXIS] / residual_shape[COL_AXIS]))
-    equal_channels = input_shape[CHANNEL_AXIS] == residual_shape[CHANNEL_AXIS]
-
-    shortcut = input
-    # 1 X 1 conv if shape is different. Else identity.
-    # In the first bottleneck of each _residual_block, this will be in case !
-    # 每一残差块的第一个瓶颈层，会出现这种情况？
-    if shortcut_strides > 1 or not equal_channels:
-        shortcut = KL.Conv2D(filters=residual_shape[CHANNEL_AXIS],
-                             kernel_size=(1, 1),
-                             strides=shortcut_strides,
-                             padding="valid",
-                             kernel_initializer="he_normal",
-                             kernel_regularizer=KR.l2(0.0001))(input)
-        shortcut = shortcut[:, :residual_shape[ROW_AXIS], :residual_shape[ROW_AXIS], :]
-    # print(shortcut.shape)
-    # print(residual.shape)
-    return KL.add([shortcut, residual])
-
-
-def _residual_block(block_function, filters, repetitions, is_kernel_3, k3_stride):
+def _build_layer(filters, repetition, is_k3=False, downsample_stride=1):
     """Builds a residual block with repeating bottleneck blocks.
     is_kernel_3 means many things for the first block
     """
@@ -103,58 +55,12 @@ def _residual_block(block_function, filters, repetitions, is_kernel_3, k3_stride
         # 第一个瓶颈层,有些特殊,它的stride和kernel_size是要根据配置来调整的,而且和他的原型Resnet中对应的层处理的方式有差别！
         # 即kernel和stride的设置有区别！
         # 参见ResnetBuilder.py内的注释.
-        input = block_function(filters, k3_stride=k3_stride, is_kernel_3=is_kernel_3)(input)
-        for _ in range(1, repetitions):
-            input = block_function(filters=filters, k3_stride=1, is_kernel_3=False)(input)
+        input = _bottleneck(filters, is_k3=is_k3, downsample_stride=downsample_stride)(input)
+        for _ in range(1, repetition):
+            input = _bottleneck(filters, is_k3=False, downsample_stride=1)(input)
         return input
 
     return f
-
-
-def _conv_bn_residual_relu(**conv_params):
-    """Helper to build a conv -> BN ->Residual -> Relu block
-    这是我根据Bagnet里的要求改的！在Bagnet里，residual在Relu前.
-    """
-    init_input = conv_params["input"]
-    filters = conv_params["filters"]
-    kernel_size = conv_params["kernel_size"]
-    strides = conv_params.setdefault("strides", (1, 1))
-    shortcut_strides = conv_params.setdefault("shortcut_strides", (1, 1))
-    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
-    padding = conv_params.setdefault("padding", "valid")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", KR.l2(1.e-4))
-
-    def f(input):
-        conv = KL.Conv2D(filters=filters, kernel_size=kernel_size,
-                         strides=strides, padding=padding,
-                         kernel_initializer=kernel_initializer,
-                         kernel_regularizer=kernel_regularizer)(input)
-        norm = KL.BatchNormalization(axis=CHANNEL_AXIS)(conv)
-        residual = _shortcut(init_input, norm, shortcut_strides)
-
-        return KL.Activation("relu")(residual)
-
-    return f
-
-def bottleneck(filters, is_kernel_3=False, k3_stride=1):
-    """
-    The second _conv_bn_relu's kernel_size is determined by is_kernel_3
-    Returns:
-        A final conv layer of filters * 4
-    """
-    def f(input):
-        if is_kernel_3:
-            k3_size = 3
-        else:
-            k3_size = 1
-
-        conv_1_1 = _conv_bn_relu(filters=filters, kernel_size=(1, 1))(input)
-        conv_3_3 = _conv_bn_relu(filters=filters, kernel_size=(k3_size, k3_size), strides=(k3_stride, k3_stride))(conv_1_1)
-        residual = _conv_bn_residual_relu(input=input, filters=filters * 4, kernel_size=(1, 1), shortcut_strides=k3_stride)(conv_3_3)
-        return residual  # _shortcut(input, residual)
-
-    return f
-
 
 class BagnetBuilder(object):
     @staticmethod
@@ -167,56 +73,45 @@ class BagnetBuilder(object):
             num_outputs: The number of outputs at final softmax layer
             repetitions: Number of repetitions of various block units.
                 At each block unit, the number of filters are doubled and the input size is halved
-
+            k3: 各层是否使用大小为3的卷积核。
+            strides: 各层的第一块的下采样率。
+            num_outputs: 类别数。
         Returns:
             The keras `Model`.
         """
-        block_fn = bottleneck
         if len(input_shape) != 3:
             raise Exception("Input shape should be a tuple (nb_rows, nb_cols, nb_channels)")
         assert len(repetitions) == len(k3), 'ERROR: len(repetitions) is different len(k3)'
         assert len(repetitions) == len(strides), 'ERROR: len(repetitions) is different len(strides)'
 
         input = KL.Input(shape=input_shape)
-        conv0 = KL.Conv2D(filters=64,
-                          kernel_size=(1, 1),
-                          strides=(1, 1),
-                          padding="valid",
-                          kernel_initializer="he_normal",
-                          kernel_regularizer=KR.l2(1.e-4))(input)
 
-        conv1 = _conv_bn_relu(filters=64,
-                              kernel_size=(3, 3),
-                              padding="valid")(conv0)
+        conv0 = KL.Conv2D(64, 1)(input)
+        conv1 = KL.Conv2D(64, 3, padding=_PAD)(conv0)
+        bn = KL.BatchNormalization()(conv1)
+        relu = KL.Activation("relu")(bn)
+        prep = relu
 
-        block = conv1
         filters = 64
-        for i, r in enumerate(repetitions):
-            block = _residual_block(block_fn,
-                                    filters=filters,
-                                    repetitions=r,
-                                    is_kernel_3=True if k3[i] == 1 else False,
-                                    k3_stride=strides[i]
-                                    )(block)
-            filters *= 2
-
-        # Last activation
-        # block = _bn_relu(block) # 没必要了！
+        layer0 = _build_layer(64, repetitions[0], is_k3=True if k3[0] == 1 else False, downsample_stride=strides[0])(prep)
+        layer1 = _build_layer(128, repetitions[1], is_k3=True if k3[1] == 1 else False, downsample_stride=strides[1])(layer0)
+        layer2 = _build_layer(256, repetitions[2], is_k3=True if k3[2] == 1 else False, downsample_stride=strides[2])(layer1)
+        layer3 = _build_layer(512, repetitions[3], is_k3=True if k3[3] == 1 else False, downsample_stride=strides[3])(layer2)
 
         # Classifier block
         # 对于BagNet,我始终没明白的是按224训练,按9\17\33来使用,是如何用下面的方法做到的.故我将它换成GlobalAvgPool2D以适应输入形式的可变性.
         # block_shape = KB.int_shape(block)
         # pool2 = KL.AveragePooling2D(pool_size=(block_shape[ROW_AXIS], block_shape[COL_AXIS]), strides=(1, 1))(block)
         # flatten1 = KL.Flatten(pool2)
-        pool2 = KL.GlobalAvgPool2D()(block)
+        pool = KL.GlobalAvgPool2D()(layer3)
         dense = KL.Dense(units=num_outputs, kernel_initializer="he_normal",
-                         activation="softmax")(pool2)
+                         activation="softmax")(pool)
 
         model = KM.Model(inputs=input, outputs=dense)
         return model
 
     @staticmethod
-    def build_bagnet_9(input_shape=(None, None, 3), num_outputs=1000):  # input_shape=(9, 9, 3)
+    def _build_bagnet_9(input_shape=(9, 9, 3), num_outputs=1000):  # input_shape=(9, 9, 3)
         return BagnetBuilder.build(input_shape,
                                    # bottleneck,
                                    repetitions=[3, 4, 6, 3],
@@ -225,19 +120,29 @@ class BagnetBuilder(object):
                                    num_outputs=num_outputs)
 
     @staticmethod
-    def build_bagnet_17(input_shape=(None, None, 3), num_outputs=1000):  # input_shape=(17, 17, 3)
+    def _build_bagnet_17(input_shape=(17, 17, 3), num_outputs=1000):  # input_shape=(17, 17, 3)
         return BagnetBuilder.build(input_shape,
                                    # bottleneck,
-                                   repetitions=[3, 4, 23, 3],
+                                   repetitions=[3, 4, 6, 3],
                                    k3=[1, 1, 1, 0],
                                    strides=[2, 2, 2, 1],
                                    num_outputs=num_outputs)
 
     @staticmethod
-    def build_bagnet_33(input_shape=(None, None, 3), num_outputs=1000):  # input_shape=(33, 33, 3)
+    def _build_bagnet_33(input_shape=(33, 33, 3), num_outputs=1000):  # input_shape=(33, 33, 3)
         return BagnetBuilder.build(input_shape,
                                    # bottleneck,
-                                   repetitions=[3, 8, 36, 3],
+                                   repetitions=[3, 4, 6, 3],
                                    k3=[1, 1, 1, 1],
                                    strides=[2, 2, 2, 1],
                                    num_outputs=num_outputs)
+
+    @staticmethod
+    def build_bagnet_N(n=4, num_outputs=1000): # input_shape=(2**n+1, 2**n+1, 3)
+        assert n > 2
+        size=2**n+1
+        input_shape=(size, size, 3)
+        k3 = [0, 0, 0, 0]
+        for i in range(4):
+            k3[i] = 1 if i < n-1 else 0
+        return BagnetBuilder.build(input_shape, [3, 4, 6, 3], k3, [2, 2, 2, 1], num_outputs)

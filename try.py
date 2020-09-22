@@ -4,12 +4,12 @@ import numpy as np
 import skimage.io as io
 import cv2
 
-# from pycocotools.coco import COCO
+from pycocotools.coco import COCO
 
 from matplotlib import pyplot as plt
 
 import tensorflow as tf
-# import tensorflow_datasets as tfds
+import tensorflow_datasets as tfds
 
 
 from tensorgroup.models.networks.ResnetKeypointBuilder import ResnetKeypointBuilder as RKB
@@ -36,10 +36,13 @@ def about_model_ResnetKeypoint():
     modelP.summary()
 
 def about_model_BageNet():
-    modelB = BB.build_bagnet_9()  # input_shape = (224, 224, 3)
-    modelB.compile(optimizer=tf.keras.optimizers.RMSprop(0.001),
-                   loss='sparse_categorical_crossentropy',
-                   metrics=['sparse_categorical_accuracy'])
+    # modelB = BB.build_bagnet_9()  # input_shape = (224, 224, 3)
+    # modelB.compile(optimizer=tf.keras.optimizers.RMSprop(0.001),
+    #                loss='sparse_categorical_crossentropy',
+    #                metrics=['sparse_categorical_accuracy'])
+    # modelB.summary()
+
+    modelB = BB.build_bagnet_N(3, 1000)
     modelB.summary()
 
 def about_keras_model_ResNet50V2():
@@ -283,6 +286,7 @@ image_filtered = tf.nn.separable_conv2d(
 if __name__ == '__main__':
     # about_dataset_voc()
     # example()
+    # about_dataset_imagenet2012()
     about_model_BageNet()
     # about_model_ResnetKeypoint()
     # about_keras_model_ResNet50V2()
