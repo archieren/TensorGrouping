@@ -4,7 +4,7 @@ import numpy as np
 import skimage.io as io
 import cv2
 
-from pycocotools.coco import COCO
+# from pycocotools.coco import COCO
 
 from matplotlib import pyplot as plt
 
