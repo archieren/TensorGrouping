@@ -4,7 +4,7 @@ import numpy as np
 import skimage.io as io
 import cv2
 
-# from pycocotools.coco import COCO
+from pycocotools.coco import COCO
 
 from matplotlib import pyplot as plt
 
@@ -242,14 +242,14 @@ def example():
     # print(imagenet2012_train)
     # for images, _ in imagenet2012_train.batch(32):
     #     print(images.shape)
-    modelB = BB.build_bagnet_9(input_shape=(224, 224, 3))
+    modelB = BB.build_bagnet_N(3, 1000 )
     modelB.compile(optimizer=tf.keras.optimizers.RMSprop(0.001),
                    loss='sparse_categorical_crossentropy',
                    metrics=['sparse_categorical_accuracy'])
     modelB.fit(imagenet2012_train.batch(8), epochs=1)
 
 def about_video_stream():
-    cap = cv2.VideoCapture("rtsp://admin:12345678zcj@192.168.101.243:554//h264/ch40/main/av_stream")
+    cap = cv2.VideoCapture("rtsp://admin:12345678zcj@192.168.101.180:554//h264/ch40/main/av_stream")
     # rtsp://admin:12345678zcj@192.168.101.236:554//h264/ch34/main/av_stream
     ret, frame = cap.read()
     while ret:
@@ -286,8 +286,8 @@ image_filtered = tf.nn.separable_conv2d(
 if __name__ == '__main__':
     # about_dataset_voc()
     # example()
-    # about_dataset_imagenet2012()
-    about_model_BageNet()
+    about_dataset_imagenet2012()
+    # about_model_BageNet()
     # about_model_ResnetKeypoint()
     # about_keras_model_ResNet50V2()
     # about_keras_model_CenterNet("pred")

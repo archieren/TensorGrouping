@@ -92,10 +92,10 @@ class BagnetBuilder(object):
         relu = KL.Activation("relu")(bn)
         prep = relu
 
-        layer0 = _build_layer(64, repetitions[0], is_k3=True if k3[0] == 1 else False, is_down=True)(prep)
-        layer1 = _build_layer(128, repetitions[1], is_k3=True if k3[1] == 1 else False, is_down=True)(layer0)
-        layer2 = _build_layer(256, repetitions[2], is_k3=True if k3[2] == 1 else False, is_down=True)(layer1)
-        layer3 = _build_layer(512, repetitions[3], is_k3=True if k3[3] == 1 else False, is_down=False)(layer2)
+        layer0 = _build_layer(64, repetitions[0], is_k3=k3[0], is_down=True)(prep)
+        layer1 = _build_layer(128, repetitions[1], is_k3=k3[1], is_down=True)(layer0)
+        layer2 = _build_layer(256, repetitions[2], is_k3=k3[2], is_down=True)(layer1)
+        layer3 = _build_layer(512, repetitions[3], is_k3=k3[3], is_down=False)(layer2)
 
         # Classifier block
         # 对于BagNet,我始终没明白的是按224训练,按9\17\33来使用,是如何用下面的方法做到的.
@@ -111,12 +111,12 @@ class BagnetBuilder(object):
         return model
 
     @staticmethod
-    def build_bagnet_N(n=4, num_outputs=1000):  # input_shape=(2**n+1, 2**n+1, 3) n=3, 4, 5
+    def build_bagnet_N(n=4, num_outputs=1000):  # input_shape=(2**n+1, 2**n+1, 3). As n=(3, 4, 5) => size=(9, 17, 33)
         assert n > 2
-        size = 2**n+1
-        input_shape = (size, size, 3)
+        # size = 2**n+1
+        input_shape = (224, 224, 3)
         repetitions = [3, 4, 5, 6]
-        k3 = [0, 0, 0, 0]
+        k3 = [False, False, False, False]
         for i in range(4):
-            k3[i] = 1 if i < n-1 else 0
+            k3[i] = True if i < n-1 else False
         return BagnetBuilder.build(input_shape, repetitions, k3, num_outputs)
