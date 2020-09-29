@@ -285,8 +285,8 @@ image_filtered = tf.nn.separable_conv2d(
 """
 if __name__ == '__main__':
     # about_dataset_voc()
-    # example()
-    about_dataset_imagenet2012()
+    example()
+    # about_dataset_imagenet2012()
     # about_model_BageNet()
     # about_model_ResnetKeypoint()
     # about_keras_model_ResNet50V2()

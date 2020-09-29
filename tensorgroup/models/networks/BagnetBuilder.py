@@ -114,7 +114,7 @@ class BagnetBuilder(object):
     def build_bagnet_N(n=4, num_outputs=1000):  # input_shape=(2**n+1, 2**n+1, 3). As n=(3, 4, 5) => size=(9, 17, 33)
         assert n > 2
         # size = 2**n+1
-        input_shape = (224, 224, 3)
+        input_shape = (None, None, 3)  # (224, 224, 3)
         repetitions = [3, 4, 5, 6]
         k3 = [False, False, False, False]
         for i in range(4):
