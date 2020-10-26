@@ -8,65 +8,100 @@ KB = tf.keras.backend
 KU = tf.keras.utils
 KR = tf.keras.regularizers
 
-def down_rsu_with(rsu, down_in, pooling=True):
-    hor_out = rsu(down_in)
-    if pooling:
-        down_out = KL.MaxPool2D(pool_size=2, strides=2)(hor_out)
-    else:
-        down_out = hor_out
-    return hor_out, down_out
+"""
+解决"ValueError: tf.function-decorated function tried to create variables on non-first call."的方法。
+对于含有变量的层，不能放到函数里来处理。只能采用一次定义，后引用的模式。
+"""
 
-def up_rsu_with(rsu, hor_in, up_in, up_down_scale, side_c, upsampling=True):
-    if upsampling:
-        up_out = KL.UpSampling2D(size=2, interpolation='bilinear')(up_in)
-    else:
-        up_out = up_in
-    up_out = KL.concatenate([hor_in, up_out])
-    up_out = rsu(up_out)
-    side_fuse = KL.Conv2D(side_c, kernel_size=3, padding='same')(up_out)
-    if up_down_scale > 0:
-        side_fuse = KL.UpSampling2D(size=2**up_down_scale, interpolation='bilinear')(side_fuse)
-    return side_fuse, up_out
 
-def floor_rsu(rsu, down_in, up_down_scale, side_c):
-    up_out = rsu(down_in)
-    side_fuse = KL.Conv2D(side_c, kernel_size=3, padding='same')(up_out)
-    if up_down_scale > 0:
-        side_fuse = KL.UpSampling2D(size=2**up_down_scale, interpolation='bilinear')(side_fuse)
-    return side_fuse, up_out
+def down_rsu_with(rsu, pooling=True):
+    maxpool = KL.MaxPool2D(pool_size=2, strides=2)
+    def f(down_in):
+        hor_out = rsu(down_in)
+        if pooling:
+            down_out = maxpool(hor_out)
+        else:
+            down_out = hor_out
+        return hor_out, down_out
+    return f
+
+def up_rsu_with(rsu, up_down_scale, side_c, upsampling=True):
+    conv = KL.Conv2D(side_c, kernel_size=3, padding='same')
+    up_us = KL.UpSampling2D(size=2, interpolation='bilinear')
+    side_us = KL.UpSampling2D(size=2**up_down_scale, interpolation='bilinear')
+    def f(hor_in, up_in):
+        if upsampling:
+            up_out = up_us(up_in)
+        else:
+            up_out = up_in
+        up_out = KL.concatenate([hor_in, up_out])
+        up_out = rsu(up_out)
+        side_fuse = conv(up_out)
+        if up_down_scale > 0:
+            side_fuse = side_us(side_fuse)
+        return side_fuse, up_out
+
+    return f
+
+def floor_rsu(rsu, up_down_scale, side_c):
+    conv = KL.Conv2D(side_c, kernel_size=3, padding='same')
+    side_us = KL.UpSampling2D(size=2**up_down_scale, interpolation='bilinear')
+    def f(down_in):
+        up_out = rsu(down_in)
+        side_fuse = conv(up_out)
+        if up_down_scale > 0:
+            side_fuse = side_us(side_fuse)
+        return side_fuse, up_out
+    return f
 
 class U_2_Net(KM.Model):
     def __init__(self, side_c=1, is_simple=False, **kwargs):
         super(U_2_Net, self).__init__(**kwargs)
         self.side_c = side_c
         if not is_simple:
-            self.rsu_d0 = RSU.RSU7(filters=64, mid_filters=32, name='rsu7_d')
-            self.rsu_d1 = RSU.RSU6(filters=128, mid_filters=32, name='rsu6_d')
-            self.rsu_d2 = RSU.RSU5(filters=256, mid_filters=64, name='rsu5_d')
-            self.rsu_d3 = RSU.RSU4(filters=512, mid_filters=128, name='rsu4_d')
-            self.rsu_d4 = RSU.RSU4F(filters=512, mid_filters=256, name='rsu4f_d')
+            self.rsu_d0 = RSU.RSU7(filters=64, mid_filters=32)
+            self.rsu_d1 = RSU.RSU6(filters=128, mid_filters=32)
+            self.rsu_d2 = RSU.RSU5(filters=256, mid_filters=64)
+            self.rsu_d3 = RSU.RSU4(filters=512, mid_filters=128)
+            self.rsu_d4 = RSU.RSU4F(filters=512, mid_filters=256)
 
-            self.rsu_f = RSU.RSU4F(filters=512, mid_filters=256, name='rsu4f_f')
+            self.rsu_fl = RSU.RSU4F(filters=512, mid_filters=256)
 
-            self.rsu_u4 = RSU.RSU4F(filters=512, mid_filters=256, name='rsu4f_u')
-            self.rsu_u3 = RSU.RSU4(filters=256, mid_filters=128, name='rsu4_u')
-            self.rsu_u2 = RSU.RSU5(filters=128, mid_filters=64, name='rsu5_u')
-            self.rsu_u1 = RSU.RSU6(filters=64, mid_filters=32, name='rsu6_u')
-            self.rsu_u0 = RSU.RSU7(filters=64, mid_filters=16, name='rsu7_u')
+            self.rsu_u4 = RSU.RSU4F(filters=512, mid_filters=256)
+            self.rsu_u3 = RSU.RSU4(filters=256, mid_filters=128)
+            self.rsu_u2 = RSU.RSU5(filters=128, mid_filters=64)
+            self.rsu_u1 = RSU.RSU6(filters=64, mid_filters=32)
+            self.rsu_u0 = RSU.RSU7(filters=64, mid_filters=16)
         else:
-            self.rsu_d0 = RSU.RSU7(filters=64, mid_filters=16, name='rsu7_d')
-            self.rsu_d1 = RSU.RSU6(filters=64, mid_filters=16, name='rsu6_d')
-            self.rsu_d2 = RSU.RSU5(filters=64, mid_filters=16, name='rsu5_d')
-            self.rsu_d3 = RSU.RSU4(filters=64, mid_filters=16, name='rsu4_d')
-            self.rsu_d4 = RSU.RSU4F(filters=64, mid_filters=16, name='rsu4f_d')
+            self.rsu_d0 = RSU.RSU7(filters=64, mid_filters=16)
+            self.rsu_d1 = RSU.RSU6(filters=64, mid_filters=16)
+            self.rsu_d2 = RSU.RSU5(filters=64, mid_filters=16)
+            self.rsu_d3 = RSU.RSU4(filters=64, mid_filters=16)
+            self.rsu_d4 = RSU.RSU4F(filters=64, mid_filters=16)
 
-            self.rsu_f = RSU.RSU4F(filters=64, mid_filters=16, name='rsu4f_f')
+            self.rsu_fl = RSU.RSU4F(filters=64, mid_filters=16)
 
-            self.rsu_u4 = RSU.RSU4F(filters=64, mid_filters=16, name='rsu4f_u')
-            self.rsu_u3 = RSU.RSU4(filters=64, mid_filters=16, name='rsu4_u')
-            self.rsu_u2 = RSU.RSU5(filters=64, mid_filters=16, name='rsu5_u')
-            self.rsu_u1 = RSU.RSU6(filters=64, mid_filters=16, name='rsu6_u')
-            self.rsu_u0 = RSU.RSU7(filters=64, mid_filters=16, name='rsu7_u')
+            self.rsu_u4 = RSU.RSU4F(filters=64, mid_filters=16)
+            self.rsu_u3 = RSU.RSU4(filters=64, mid_filters=16)
+            self.rsu_u2 = RSU.RSU5(filters=64, mid_filters=16)
+            self.rsu_u1 = RSU.RSU6(filters=64, mid_filters=16)
+            self.rsu_u0 = RSU.RSU7(filters=64, mid_filters=16)
+
+        # The up_down_factor at the floor!
+        up_down_f = 5
+        self.down0 = down_rsu_with(self.rsu_d0)
+        self.down1 = down_rsu_with(self.rsu_d1)
+        self.down2 = down_rsu_with(self.rsu_d2)
+        self.down3 = down_rsu_with(self.rsu_d3)
+        self.down4 = down_rsu_with(self.rsu_d4)
+        self.floor = floor_rsu(self.rsu_fl, up_down_f - 0, self.side_c)
+        self.up4 = up_rsu_with(self.rsu_u4, up_down_f - 1, self.side_c)
+        self.up3 = up_rsu_with(self.rsu_u3, up_down_f - 2, self.side_c)
+        self.up2 = up_rsu_with(self.rsu_u2, up_down_f - 3, self.side_c)
+        self.up1 = up_rsu_with(self.rsu_u1, up_down_f - 4, self.side_c)
+        self.up0 = up_rsu_with(self.rsu_u0, up_down_f - 5, self.side_c)
+
+        self.fuse_conv = KL.Conv2D(self.side_c, kernel_size=3, padding='same')
 
     def call(self, inputs):
         # The up_down_factor at the floor!
@@ -74,26 +109,26 @@ class U_2_Net(KM.Model):
         # 一般假设 inputs的宽高是2**5的整数倍.
         down_x = inputs
         # Down！
-        hor_x_0, down_x = down_rsu_with(self.rsu_d0, down_x)
-        hor_x_1, down_x = down_rsu_with(self.rsu_d1, down_x)
-        hor_x_2, down_x = down_rsu_with(self.rsu_d2, down_x)
-        hor_x_3, down_x = down_rsu_with(self.rsu_d3, down_x)
-        hor_x_4, down_x = down_rsu_with(self.rsu_d4, down_x)
+        hor_x_0, down_x = self.down0(down_x)
+        hor_x_1, down_x = self.down1(down_x)
+        hor_x_2, down_x = self.down2(down_x)
+        hor_x_3, down_x = self.down3(down_x)
+        hor_x_4, down_x = self.down4(down_x)
 
         # Floor！
-        side_floor, up_x = floor_rsu(self.rsu_f, down_x, up_down_f - 0, self.side_c)
+        side_floor, up_x = self.floor(down_x)
         side_5 = side_floor
 
         # Up！
-        side_4, up_x = up_rsu_with(self.rsu_u4, hor_x_4, up_x, up_down_f - 1, self.side_c)
-        side_3, up_x = up_rsu_with(self.rsu_u3, hor_x_3, up_x, up_down_f - 2, self.side_c)
-        side_2, up_x = up_rsu_with(self.rsu_u2, hor_x_2, up_x, up_down_f - 3, self.side_c)
-        side_1, up_x = up_rsu_with(self.rsu_u1, hor_x_1, up_x, up_down_f - 4, self.side_c)
-        side_0, up_x = up_rsu_with(self.rsu_u0, hor_x_0, up_x, up_down_f - 5, self.side_c)
+        side_4, up_x = self.up4(hor_x_4, up_x)
+        side_3, up_x = self.up3(hor_x_3, up_x)
+        side_2, up_x = self.up2(hor_x_2, up_x)
+        side_1, up_x = self.up1(hor_x_1, up_x)
+        side_0, up_x = self.up0(hor_x_0, up_x)
 
         # Side！
         side_fuse = KL.concatenate([side_0, side_1, side_2, side_3, side_4, side_5])
-        side_fuse = KL.Conv2D(self.side_c, kernel_size=3, padding='same')(side_fuse)
+        side_fuse = self.fuse_conv(side_fuse)
         side_fuse = KL.Activation('sigmoid', name='side_fuse')(side_fuse)
 
         side_5 = KL.Activation('sigmoid', name='side_5')(side_5)
