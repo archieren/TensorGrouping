@@ -1,11 +1,14 @@
 import os
+import cv2
+from matplotlib import pyplot as plt
+
 import tensorflow as tf  # TF 2.0
 import tensorflow.keras as K
 import tensorgroup.models.networks.U2netBuilder as U2B
 import tensorgroup.models.networks.UnetBuilder as UB
 from tensorgroup.models.dataset.u_net_inputs import DefineInputs
 from tensorgroup.models.dataset.unet_mask import mask
-
+from tensorgroup.models.dataset import mode_keys as ModeKey
 
 KL = tf.keras.layers
 KM = tf.keras.models
@@ -17,16 +20,17 @@ KO = tf.keras.optimizers
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'  # or any {'0', '1', '2'}
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'  # tensorflow < 2.3 时,还必须设置此项,否者基本的卷积都无法运行，奇怪的事.
 
-from tensorgroup.models.dataset import mode_keys as ModeKey
 
-I_SIZE=512
+I_SIZE = 512
 u_2_net_input_config = {
     'data_format': 'channels_last',
-    'network_input_shape': [I_SIZE, I_SIZE]                          # Must match the network's input_shape!
+    'network_input_size': [I_SIZE, I_SIZE],                          # Must match the network's input_shape!
+    'in_name': 'image',
+    'out_name': 'side_fuse'                                          # 'side_all'
 }
 
-model = U2B.U2netBuilder.u_2_net(input_shape=(None, None, 3))
-model.summary()
+# model = U2B.U2netBuilder.u_2_net(input_shape=(1024, 1024, 3))
+# model.summary()
 
 # model = U2B.U2netBuilder.u_2_net_p(input_shape=(1024, 1024, 3))
 # model.summary()
@@ -54,14 +58,14 @@ def about_mask_dataset():
 
     for inputs, targets in dataset(u_2_net_input_config):
         print(tf.shape(inputs['image']))
-        print(tf.shape(targets['u_2__net']))
+        print(tf.shape(targets['side_all']))
 
 # about_mask_dataset()
 
 def train():
     tfr_dir = "./data_u_2_mask/catenary/tf_records"
     inputs_definer = DefineInputs
-    dataset = mask.MaskInputs(tfr_dir, inputs_definer=inputs_definer, batch_size=1, num_exsamples=-1, repeat_num=2, buffer_size=1000)
+    dataset = mask.MaskInputs(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=-1, repeat_num=2, buffer_size=1000)
 
     checkpoint_dir = os.path.join(os.getcwd(), 'work', 'u_2_net_p', 'ckpt')
     saved_model_dir = os.path.join(os.getcwd(), 'work', 'u_2_net_p', 'sm')
@@ -78,9 +82,36 @@ def train():
     latest = tf.train.latest_checkpoint(checkpoint_dir)
     if latest is not None:
         train_model.load_weights(latest)
-    train_model.fit(dataset(u_2_net_input_config), epochs=2, callbacks=[cp_callback])
+    train_model.fit(dataset(u_2_net_input_config), epochs=200, callbacks=[cp_callback])
     train_model.save(os.path.join(saved_model_dir, 'catenary_model.h5'))
 
 # make_dataset()
-# train()
+
+def normPred(p):
+    max = KB.max(p)
+    min = KB.min(p)
+    p = (p - min)/(max - min)
+    return p
+
+def predict():
+    saved_model_dir = os.path.join(os.getcwd(), 'work', 'u_2_net_p', 'sm')
+    model = U2B.U2netBuilder.u_2_net_p(input_shape=(I_SIZE, I_SIZE, 3))
+    model.load_weights(os.path.join(saved_model_dir, 'catenary_model.h5'), by_name=True, skip_mismatch=True)
+    path = os.path.join(os.getcwd(), 'data_u_2_mask', 'catenary', 'TestImages', '3.jpg')
+    image = cv2.imread(path)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image_t = tf.convert_to_tensor(image)
+    image_t = mask.MaskInputs.ImageNormalizer()(image_t)
+    print(tf.reduce_max(image_t))
+    image_t = tf.image.resize(image_t, [1024, 1024], method=tf.image.ResizeMethod.BILINEAR)
+    image_input = tf.expand_dims(image_t, axis=0)
+    predict = model.predict(image_input)[0]
+    # predict = normPred(predict)
+    plt.imshow(predict)
+    plt.show()
+    pass
+
+
+train()
+# predict()
 # about_mask_dataset()

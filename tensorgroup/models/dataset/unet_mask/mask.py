@@ -98,8 +98,9 @@ class MaskInputs:
             })
             image = tf.image.decode_jpeg(features['image'], channels=3)
             mask = tf.image.decode_png(features['mask'], channels=1)
+            mask = tf.image.convert_image_dtype(mask, dtype=tf.float32)
             if self._image_normalizer is not None:
-                image, mask = self._image_normalizer(image, mask)
+                image = self._image_normalizer(image)
             return image, mask
 
     class ImageNormalizer:
@@ -112,7 +113,7 @@ class MaskInputs:
             self._offset = (0.485, 0.456, 0.406)
             self._scale = (0.229, 0.224, 0.225)
 
-        def __call__(self, image, mask):
+        def __call__(self, image):
             """Normalizes the image to zero mean and unit variance."""
             image = tf.image.convert_image_dtype(image, dtype=tf.float32)
             offset = tf.constant(self._offset)
@@ -124,10 +125,7 @@ class MaskInputs:
             scale = tf.expand_dims(scale, axis=0)
             scale = tf.expand_dims(scale, axis=0)
             image /= scale
-
-            mask = tf.image.convert_image_dtype(mask, dtype=tf.float32)
-            return image, mask
-
+            return image
 
     def __call__(self, network_input_config):
         tfrecords = tf.io.gfile.glob(os.path.join(self._tfrecords_dir, TFR_PATTERN.format(self._mode)))
@@ -136,7 +134,7 @@ class MaskInputs:
 
     def __gen_input__(self, dataset, network_input_config):
         decoder = self.Decoder(self.ImageNormalizer())
-        inputs_def = self._inputs_definer(network_input_config['network_input_shape'])
+        inputs_def = self._inputs_definer(network_input_config)
         dataset = dataset.map(decoder).map(inputs_def)
         if self._num_examples > 0:
             dataset = dataset.take(self._num_examples)

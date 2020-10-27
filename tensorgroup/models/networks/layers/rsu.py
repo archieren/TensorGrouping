@@ -193,49 +193,32 @@ def RSU4(filters=3, mid_filters=12):
 
     return f
 
-class RSU4F(KL.Layer):
-    """
-    The Residual U-Block.
-    The 'F' means flattened.
-    """
+def RSU4F(filters=3, mid_filters=12):
+    relu_bn_conv_d0 = relu_bn_conv(filters=filters)
+    relu_bn_conv_d1 = relu_bn_conv(filters=mid_filters, dilation_rate=1)
+    relu_bn_conv_d2 = relu_bn_conv(filters=mid_filters, dilation_rate=2)
+    relu_bn_conv_d3 = relu_bn_conv(filters=mid_filters, dilation_rate=4)
 
-    def __init__(self, filters=3, mid_filters=12, **kwargs):
-        """Builds a custom residual u-net architecture!
+    relu_bn_conv_f = relu_bn_conv(filters=mid_filters, dilation_rate=8)
 
-        Args:
-            filters: The output channels!
-            mid_filters: The middle channels in the u-process!
-        Returns:
-            The keras `Layer`.
-        """
-        super(RSU4F, self).__init__(**kwargs)
-        self.relu_bn_conv_d0 = relu_bn_conv(filters=filters)
-        self.relu_bn_conv_d1 = relu_bn_conv(filters=mid_filters, dilation_rate=1)
-        self.relu_bn_conv_d2 = relu_bn_conv(filters=mid_filters, dilation_rate=2)
-        self.relu_bn_conv_d3 = relu_bn_conv(filters=mid_filters, dilation_rate=4)
+    relu_bn_conv_u3 = relu_bn_conv(filters=mid_filters, dilation_rate=4)
+    relu_bn_conv_u2 = relu_bn_conv(filters=mid_filters, dilation_rate=2)
+    relu_bn_conv_u1 = relu_bn_conv(filters=filters, dilation_rate=1)
 
-        self.relu_bn_conv_f = relu_bn_conv(filters=mid_filters, dilation_rate=8)
-
-        self.relu_bn_conv_u3 = relu_bn_conv(filters=mid_filters, dilation_rate=4)
-        self.relu_bn_conv_u2 = relu_bn_conv(filters=mid_filters, dilation_rate=2)
-        self.relu_bn_conv_u1 = relu_bn_conv(filters=filters, dilation_rate=1)
-
-    def build(self, input_shape):
-        super(RSU4F, self).build(input_shape)
-        self.built = True
-
-    def call(self, x):
+    def f(x):
         down_x = x
-        hor_x_0, down_x = down_RBC_with(self.relu_bn_conv_d0, down_x, pooling=False)
+        hor_x_0, down_x = down_RBC_with(relu_bn_conv_d0, down_x, pooling=False)
 
-        hor_x_1, down_x = down_RBC_with(self.relu_bn_conv_d1, down_x, pooling=False)
-        hor_x_2, down_x = down_RBC_with(self.relu_bn_conv_d2, down_x, pooling=False)
-        hor_x_3, down_x = down_RBC_with(self.relu_bn_conv_d3, down_x, pooling=False)
+        hor_x_1, down_x = down_RBC_with(relu_bn_conv_d1, down_x, pooling=False)
+        hor_x_2, down_x = down_RBC_with(relu_bn_conv_d2, down_x, pooling=False)
+        hor_x_3, down_x = down_RBC_with(relu_bn_conv_d3, down_x, pooling=False)
 
-        up_x = floor_RBC(self.relu_bn_conv_f, down_x)
+        up_x = floor_RBC(relu_bn_conv_f, down_x)
 
-        up_x = up_RBC_with(self.relu_bn_conv_u3, hor_x_3, up_x, upsampling=False)
-        up_x = up_RBC_with(self.relu_bn_conv_u2, hor_x_2, up_x, upsampling=False)
-        up_x = up_RBC_with(self.relu_bn_conv_u1, hor_x_1, up_x, upsampling=False)
+        up_x = up_RBC_with(relu_bn_conv_u3, hor_x_3, up_x, upsampling=False)
+        up_x = up_RBC_with(relu_bn_conv_u2, hor_x_2, up_x, upsampling=False)
+        up_x = up_RBC_with(relu_bn_conv_u1, hor_x_1, up_x, upsampling=False)
 
         return residual(hor_x_0, up_x)
+
+    return f
