@@ -30,9 +30,9 @@ def up_with(up_in, hor_in, filters):
 
 class UnetBuilder(object):
     @staticmethod
-    def unet(input_size=(256, 256, 1), name='U-NET'):
+    def unet(input_size=(256, 256, 3), name='U-NET'):
         # In
-        inputs = KL.Input(input_size)
+        inputs = KL.Input(input_size, name='image')
         down = inputs
         # Down
         hor_1, down = down_with(down, 64)
@@ -48,7 +48,7 @@ class UnetBuilder(object):
         up = up_with(up, hor_1, 64)
         # Out
         outputs = KL.Conv2D(2, 3, activation='relu', padding='same', kernel_initializer='he_normal')(up)
-        outputs = KL.Conv2D(1, 1, activation='sigmoid')(outputs)
+        outputs = KL.Conv2D(1, 1, activation='sigmoid', name='side_fuse')(outputs)
 
         model = KM.Model(inputs=inputs, outputs=outputs, name=name)
 
