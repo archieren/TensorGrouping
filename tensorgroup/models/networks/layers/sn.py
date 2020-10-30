@@ -17,7 +17,7 @@ def power_iteration(W, u, rounds=1):
 
 class SpectralNormalization(tf.keras.layers.Wrapper):
     def __init__(self, layer, **kwargs):
-        self.iteration = 1
+        self.iterations = 1
         self.eps = 1e-12
         if not isinstance(layer, tf.keras.layers.Layer):
             raise ValueError(
@@ -64,9 +64,14 @@ class SpectralNormalization(tf.keras.layers.Wrapper):
     def update_weights(self):
         self.w.assign(self.layer.kernel)
         w_reshaped = tf.reshape(self.w, [self.w.shape[-1], -1])  # [Cout, KH*KW*Cin] or [W, H]
-        sigma, u_hat, _ = power_iteration(w_reshaped, self.u)
+        sigma, u_hat, _ = power_iteration(w_reshaped, self.u, rounds=self.iterations)
         self.u.assign(u_hat)
         self.layer.kernel.assign(self.w / sigma)
 
     def restore_weights(self):
         self.layer.kernel.assign(self.w)
+
+    def get_config(self):
+        config = {"power_iterations": self.iterations}
+        base_config = super().get_config()
+        return {**base_config, **config}

@@ -1,6 +1,4 @@
 from __future__ import division
-
-
 import tensorflow as tf
 
 KL = tf.keras.layers
@@ -12,7 +10,7 @@ KR = tf.keras.regularizers
 ROW_AXIS = 1
 COL_AXIS = 2
 CHANNEL_AXIS = 3
-
+# 怕破坏原代码(ResnetBuilder),故拷过来,再改写。TODO:合并.
 
 def _bn_relu(input):
     """Helper to build a BN -> relu block: relu(BN)
@@ -190,33 +188,36 @@ class ResnetBuilder(object):
         for i, r in enumerate(repetitions):
             block = _residual_block(block_fn, filters=filters, repetitions=r, is_first_layer=(i == 0))(block)
             filters *= 2
-            # I don't sure whether _bn_relu is needed!
-            stages.append(_bn_relu(block))
+            # I don't sure whether _bn_relu is needed!但看了Keras Application中的实现,应当不用_bn_relu.
+            # stages.append(_bn_relu(block))
+            stages.append(block)
 
-        [P2, P3, P4, P5] = __gen_fpn(stages)
-        F_P5 = KL.Conv2D(P_filters, 3, padding='same')(P5)  # 平滑上采样
-        head4 = KL.Conv2D(P_filters // 2, 3, padding='same')(F_P5)
-        head4 = KL.Conv2D(P_filters // 2, 3, padding='same')(head4)
+        # 其实, [C1, C2, C3, C4, C5] = stages[:5]
+        fpn = ResnetBuilder.__gen_fpn(stages, P_filters)
+        return fpn
+        # -------------------------------------------------------------------
+        # head4 = KL.Conv2D(P_filters // 2, 3, padding='same')(P5)
+        # head4 = KL.Conv2D(P_filters // 2, 3, padding='same')(head4)
 
-        F_P4 = KL.Conv2D(P_filters, 3, padding='same')(P4)  # 平滑上采样
-        head3 = KL.Conv2D(P_filters // 2, 3, padding='same')(F_P4)
-        head3 = KL.Conv2D(P_filters // 2, 3, padding='same')(head3)
+        # head3 = KL.Conv2D(P_filters // 2, 3, padding='same')(P4)
+        # head3 = KL.Conv2D(P_filters // 2, 3, padding='same')(head3)
 
-        F_P3 = KL.Conv2D(P_filters, 3, padding='same')(P3)  # 平滑上采样
-        head2 = KL.Conv2D(P_filters // 2, 3, padding='same')(F_P3)
-        head2 = KL.Conv2D(P_filters // 2, 3, padding='same')(head2)
+        # head2 = KL.Conv2D(P_filters // 2, 3, padding='same')(P3)
+        # head2 = KL.Conv2D(P_filters // 2, 3, padding='same')(head2)
 
-        F_P2 = KL.Conv2D(P_filters, 3, padding='same')(P2)  # 平滑上采样
-        head1 = KL.Conv2D(P_filters // 2, 3, padding='same')(F_P2)
-        head1 = KL.Conv2D(P_filters // 2, 3, padding='same')(head1)
+        # head1 = KL.Conv2D(P_filters // 2, 3, padding='same')(P2)
+        # head1 = KL.Conv2D(P_filters // 2, 3, padding='same')(head1)
 
-        x = KL.Concatenate()([head1,
-                              KL.UpSampling2D(size=2)(head2),
-                              KL.UpSampling2D(size=4)(head3),
-                              KL.UpSampling2D(size=8)(head4)])
-        x = KL.Conv2D(num_outputs, 3, padding='same', kernel_initializer='he_normal', activation='linear')(x)
-        x = KL.UpSampling2D(4)(x)
-        x = KL.Activation('sigmoid')(x)
+        # x = KL.Concatenate()([head1,
+        #                       KL.UpSampling2D(size=2)(head2),
+        #                       KL.UpSampling2D(size=4)(head3),
+        #                       KL.UpSampling2D(size=8)(head4)])
+        # x = KL.Conv2D(num_outputs, 3, padding='same', kernel_initializer='he_normal', activation='linear')(x)
+        # x = KL.UpSampling2D(4)(x)
+        # x = KL.Activation('sigmoid')(x)
+        # model = KM.Model(inputs=input, outputs=x)
+        # return model
+        # -----------------------------------------------------------------------
         # # Last activation
         # block = _bn_relu(block)
         # if not include_top:
@@ -232,35 +233,72 @@ class ResnetBuilder(object):
         #                  activation="softmax")(flatten1)
 
         # model = KM.Model(inputs=input, outputs=dense)
-        model = KM.Model(inputs=input, outputs=x)
-        return model
 
     @staticmethod
-    def __gen_fpn(stages):
+    def __gen_fpn(stages, filters):
         [C1, C2, C3, C4, C5] = stages[:5]
+        # C1: [B, H/2, W/2, 64]
+        # C2: [B, H/4, W/4, 256]
+        # C3: [B, H/8, W/8, 512]
+        # C4: [B, H/16, W/16, 1024]
+        # C5: [B, H/32, W/32, 2048]
 
-        P5 = KL.Conv2D(P_filters, 1)(C5)
-        P4 = KL.Add()([KL.UpSampling2D(size=2)(P5), KL.Conv2D(P_filters, 1)(C4)])
-        P3 = KL.Add()([KL.UpSampling2D(size=2)(P4), KL.Conv2D(P_filters, 1)(C3)])
-        P2 = KL.Add()([KL.UpSampling2D(size=2)(P3), KL.Conv2D(P_filters, 1)(C2)])
-        return [P2, P3, P4, P5]
+        # fpn_stride = [8, 16, 32, 64, 128]
+        # P3: [B, H/8, W/8, 256]
+        # P4: [B, H/16, W/16, 256]
+        # P5: [B, H/32, W/32, 256]
+        # P6: [B, H/64, W/64, 256]
+        # P7: [B, H/128, W/128, 256]
+
+        # upsample C5 to get P5 from the FPN paper
+        P5 = KL.Conv2D(filters, 1)(C5)               # Hor_in flow
+        P5_upsampled = KL.UpSampling2D(size=2)(P5)   # Down_out flow
+        P5 = KL.Conv2D(filters, 3, padding='same', name='P5')(P5)  # 平滑 Hor_out flow
+
+        P4 = KL.Conv2D(filters, 1)(C4)               # Hor_in flow
+        P4 = KL.Add()([P5_upsampled, P4])
+        P4_upsampled = KL.UpSampling2D(size=2)(P4)   # Down_out flow
+        P4 = KL.Conv2D(filters, 3, padding='same', name='P4')(P4)  # 平滑 Hor_out flow
+
+        P3 = KL.Conv2D(filters, 1)(C3)               # Hor_in flow
+        P3 = KL.Add()([P4_upsampled, P3])
+        # P3_upsampled = KL.UpSampling2D(size=2)(P3)   # Down_out flow
+        P3 = KL.Conv2D(filters, 3, padding='same', name='P3')(P3)  # 平滑 Hor_out flow
+
+        # P2 = KL.Conv2D(filters, 1)(C2)               # Hor_in flow
+        # P2 = KL.Add()([P3_upsampled, P2])
+        # P2_upsampled = KL.UpSampling2D(size=2)(P2)   # Down_out flow
+        # P2 = KL.Conv2D(filters, 3, padding='same', name='P2')(P2)  # 平滑 Hor_out flow
+
+        # P1 = KL.Conv2D(filters, 1)(C1)               # Hor_in flow
+        # P1 = KL.Add()([P2_upsampled, P1])
+        # P1 = KL.Conv2D(filters, 3, padding='same', name='P1')(P1)  # 平滑 Hor_out flow
+
+        # "P6 is obtained via a 3x3 stride-2 conv on C5"
+        P6 = KL.Conv2D(filters, 3, strides=2, padding='same', name='P6')(C5)
+
+        # "P7 is computed by applying ReLU followed by a 3x3 stride-2 conv on P6"
+        P7 = KL.Activation('relu')(P6)
+        P7 = KL.Conv2D(filters, 3, strides=2, padding='same', name='P7')(P7)
+
+        return [P3, P4, P5, P6, P7]
 
     @staticmethod
-    def build_resnet_18(input, num_outputs, include_top=True):
+    def build_resnet_18_fpn(input, num_outputs, include_top=True):
         return ResnetBuilder.build(input, num_outputs, basic_block, [2, 2, 2, 2], include_top=include_top)
 
     @staticmethod
-    def build_resnet_34(input, num_outputs, include_top=True):
+    def build_resnet_34_fpn(input, num_outputs, include_top=True):
         return ResnetBuilder.build(input, num_outputs, basic_block, [3, 4, 6, 3], include_top=include_top)
 
     @staticmethod
-    def build_resnet_50(input, num_outputs, include_top=True):
+    def build_resnet_50_fpn(input, num_outputs, include_top=True):
         return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 4, 6, 3], include_top=include_top)
 
     @staticmethod
-    def build_resnet_101(input, num_outputs, include_top=True):
+    def build_resnet_101_fpn(input, num_outputs, include_top=True):
         return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 4, 23, 3], include_top=include_top)
 
     @staticmethod
-    def build_resnet_152(input, num_outputs, include_top=True):
+    def build_resnet_152_fpn(input, num_outputs, include_top=True):
         return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 8, 36, 3], include_top=include_top)

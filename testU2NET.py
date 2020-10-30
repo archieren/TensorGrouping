@@ -119,7 +119,8 @@ def predict():
 def about_resnet_fpn():
     import tensorgroup.models.networks.ResnetWithFPN as FPN
     image_input = KL.Input(shape=(512, 512, 3), name='image')
-    model = FPN.ResnetBuilder.build_resnet_50(image_input, 10)
+    fpn = FPN.ResnetBuilder.build_resnet_50_fpn(image_input, 10)
+    model = KM.Model(inputs=image_input, outputs=fpn)
     model.summary()
 
 
