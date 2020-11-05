@@ -158,7 +158,7 @@ def bottleneck(filters, init_strides=1, is_first_block_of_first_layer=False):
 
 class ResnetBuilder(object):
     @staticmethod
-    def build(input, num_outputs, block_fn, repetitions, include_top=True):
+    def build(input, num_outputs, block_fn, repetitions):
         """Builds a custom ResNet like architecture.
 
         Args:
@@ -284,21 +284,21 @@ class ResnetBuilder(object):
         return [P3, P4, P5, P6, P7]
 
     @staticmethod
-    def build_resnet_18_fpn(input, num_outputs, include_top=True):
-        return ResnetBuilder.build(input, num_outputs, basic_block, [2, 2, 2, 2], include_top=include_top)
+    def build_resnet_18_fpn(input, num_outputs):
+        return ResnetBuilder.build(input, num_outputs, basic_block, [2, 2, 2, 2])
 
     @staticmethod
-    def build_resnet_34_fpn(input, num_outputs, include_top=True):
-        return ResnetBuilder.build(input, num_outputs, basic_block, [3, 4, 6, 3], include_top=include_top)
+    def build_resnet_34_fpn(input, num_outputs):
+        return ResnetBuilder.build(input, num_outputs, basic_block, [3, 4, 6, 3])
 
     @staticmethod
-    def build_resnet_50_fpn(input, num_outputs, include_top=True):
-        return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 4, 6, 3], include_top=include_top)
+    def build_resnet_50_fpn(input, num_outputs):
+        return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 4, 6, 3])
 
     @staticmethod
-    def build_resnet_101_fpn(input, num_outputs, include_top=True):
-        return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 4, 23, 3], include_top=include_top)
+    def build_resnet_101_fpn(input, num_outputs):
+        return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 4, 23, 3])
 
     @staticmethod
-    def build_resnet_152_fpn(input, num_outputs, include_top=True):
-        return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 8, 36, 3], include_top=include_top)
+    def build_resnet_152_fpn(input, num_outputs):
+        return ResnetBuilder.build(input, num_outputs, bottleneck, [3, 8, 36, 3])

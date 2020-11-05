@@ -172,6 +172,7 @@ class CenterNetBuilder(object):
     @staticmethod
     def CenterNetOnResNet50V2(num_classes,  # backbone='resnet50'
                               input_size=512,  # 512 == 32*16
+                              input_channels=3,
                               max_objects=100, score_threshold=0.1, nms=True, flip_test=False):
         # assert backbone in ['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152']
         # dataset 来的输入如下:（参见centernet_inputs.py）
@@ -183,7 +184,7 @@ class CenterNetBuilder(object):
         #         'center_keypoint_heatmap': center_keypoint_heatmap,
         #         'center_keypoint_mask': center_keypoint_mask}
         output_size = input_size // 4
-        image_input = KL.Input(shape=(input_size, input_size, 3), name='image')
+        image_input = KL.Input(shape=(input_size, input_size, input_channels), name='image')
         ck_hm_input = KL.Input(shape=(output_size, output_size, num_classes), name='center_keypoint_heatmap')
         ck_mask_input = KL.Input(shape=(output_size, output_size, num_classes), name='center_keypoint_mask')
         shape_input = KL.Input(shape=(max_objects, 2), name='shape')

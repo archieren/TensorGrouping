@@ -15,6 +15,7 @@ class DefineInputs:
             config:
               {'data_format': 'channels_last',
                'network_input_shape': [512, 512],                           # Must match the network's input_shape!
+               'network_input_channels': 3
                'flip_prob': [0., 0.5],
                'fill_mode': 'BILINEAR',
                'color_jitter_prob': 0.5,
@@ -37,13 +38,11 @@ class DefineInputs:
             center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask:看网络的介绍.
 
         """
-
         image, ground_truth = image_augmentor(image=image,
                                               ground_truth=ground_truth,
                                               **self._config
                                               )
         # ground_truth: [y_center, x_center, height, width, classid]
-
         indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
         # 在这个地方，有必要给些注释：Model.fit 对 DataSet输入格式，是有要求的！
         return ({'image': image,
@@ -124,7 +123,6 @@ class DefineInputs:
         network_input_shape = self._config['network_input_shape']
         (i_h, i_w) = network_input_shape
         (f_h, f_w) = (int(i_h/4), int(i_w/4))
-
         c_y = ground_truth[..., 0] * f_h
         c_x = ground_truth[..., 1] * f_w
         c_h = ground_truth[..., 2] * f_h

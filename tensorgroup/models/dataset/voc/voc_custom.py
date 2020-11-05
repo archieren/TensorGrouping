@@ -17,10 +17,25 @@ from tensorgroup.models.dataset import mode_keys as ModeKey
 """
 
 
-voc_custom_classes = {
+lanzhou_classes = {
     'single_white': 0,
     'double_red': 1,
     'word': 2
+}
+catenary_classes = {
+    'holder': 0,
+    'wire_holder': 1,
+    'wire_hook': 2,
+    'clamp_up': 3,
+    'clamp_down': 4,
+    'clamp_locator': 5,
+    'insulator': 6,
+    'support': 7
+}
+
+voc_custom_classes = {
+    'lanzhou': lanzhou_classes,
+    'catenary': catenary_classes
 }
 
 TFR_PATTERN = '{}_*.tfrecords'
@@ -44,7 +59,7 @@ def float_feature(values):
     return tf.train.Feature(bytes_list=tf.train.FloatList(value=values))
 
 
-def xml_to_example(xmlpath, imgpath):
+def xml_to_example(xmlpath, imgpath, classes):
     xml = etree.parse(xmlpath)
     root = xml.getroot()
     imgname = root.find('filename').text
@@ -59,7 +74,8 @@ def xml_to_example(xmlpath, imgpath):
     ground_truth = np.zeros([len(xpath), 5], np.float32)
     for i in range(len(xpath)):
         obj = xpath[i]
-        classid = voc_custom_classes[obj.find('name').text]
+        print(obj.find('name').text)
+        classid = classes[obj.find('name').text]
         bndbox = obj.find('bndbox')
         ymin = int(bndbox.find('ymin').text)
         ymax = int(bndbox.find('ymax').text)
@@ -82,13 +98,14 @@ def xml_to_example(xmlpath, imgpath):
     return example
 
 
-def dataset2tfrecord(xml_dir, img_dir, output_dir, name, total_shards=2):
+def dataset2tfrecord(xml_dir, img_dir, output_dir, name, datasetName='lanzhou', total_shards=2):
     if tf.io.gfile.exists(output_dir):
         tf.io.gfile.rmtree(output_dir)
     tf.io.gfile.mkdir(output_dir)
     outputfiles = []
     xmllist = tf.io.gfile.glob(os.path.join(xml_dir, '*.xml'))
     num_per_shard = int(math.ceil(len(xmllist)) / float(total_shards))
+    object_classes = voc_custom_classes[datasetName]
     for shard_id in range(total_shards):
         outputname = '%s_%05d-of-%05d.tfrecords' % (name, shard_id+1, total_shards)
         outputname = os.path.join(output_dir, outputname)
@@ -100,7 +117,7 @@ def dataset2tfrecord(xml_dir, img_dir, output_dir, name, total_shards=2):
                 sys.stdout.write('\r>> Converting image %d/%d shard %d/%d' % (
                     i+1, len(xmllist), shard_id+1, total_shards))
                 sys.stdout.flush()
-                example = xml_to_example(xmllist[i], img_dir)
+                example = xml_to_example(xmllist[i], img_dir, object_classes)
                 tf_writer.write(example.SerializeToString())
             sys.stdout.write('\n')
             sys.stdout.flush()
@@ -114,6 +131,7 @@ class VocCustomInput:
 
     def __init__(self,
                  tfrecords_dir,
+                 datasetName='lanzhou',
                  inputs_definer=DefineInputs,
                  mode: Text = ModeKey.TRAIN,
                  batch_size: Optional[int] = -1,
@@ -129,13 +147,14 @@ class VocCustomInput:
         self._repeat_num = repeat_num
         self._buffer_size = buffer_size
         #
-        self._num_classes = len(voc_custom_classes)
+        self._num_classes = len(voc_custom_classes[datasetName])
         self._max_objects = max_objects
         self._inputs_definer = inputs_definer
 
     class Decoder:
-        def __init__(self, image_normalizer):
+        def __init__(self, image_normalizer, channels):
             self._image_normalizer = image_normalizer
+            self._channels = channels
 
         def __call__(self, tfrecord):
             features = tf.io.parse_single_example(tfrecord, features={
@@ -145,10 +164,10 @@ class VocCustomInput:
             })
             shape = tf.io.decode_raw(features['shape'], tf.int32)
             ground_truth = tf.io.decode_raw(features['ground_truth'], tf.float32)
-            shape = tf.reshape(shape, [3])
+            # shape = tf.reshape(shape, [3])  # 可能原始XML中有关shape的信息不准，导致这儿的shape里的信息不可用。
             ground_truth = tf.reshape(ground_truth, [-1, 5])
-            image = tf.image.decode_jpeg(features['image'], channels=3)
-            image = tf.reshape(image, shape)
+            image = tf.io.decode_jpeg(features['image'])
+            # image = tf.reshape(image, shape)
             if self._image_normalizer is not None:
                 image = self._image_normalizer(image)
             return image, ground_truth
@@ -183,7 +202,7 @@ class VocCustomInput:
         return self.__gen_input__(dataset, network_input_config)
 
     def __gen_input__(self, dataset, network_input_config):
-        decoder = self.Decoder(self.ImageNormalizer())
+        decoder = self.Decoder(self.ImageNormalizer(), network_input_config['network_input_channels'])
         inputs_def = self._inputs_definer(network_input_config,
                                           num_classes=self._num_classes,
                                           max_objects=self._max_objects)

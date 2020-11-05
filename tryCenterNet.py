@@ -46,9 +46,12 @@ config = {
 
 }
 
+I_SIZE, I_CH = 1024, 3                        # 512, 3
+
 centernet_input_config = {
     'data_format': 'channels_last',
-    'network_input_shape': [512, 512],                           # Must match the network's input_shape!
+    'network_input_shape': [I_SIZE, I_SIZE],  # Must match the network's input_shape!
+    'network_input_channels': I_CH,
     'flip_prob': [0., 0.5],
     'fill_mode': 'BILINEAR',
     'color_jitter_prob': 0.5,
@@ -65,20 +68,23 @@ def about_dataset_voc():
     for inputs, targets in dataset(centernet_input_config):
         plt.imshow(inputs['image'][0])
         plt.show()
-        print(inputs['indices'])
+        print(inputs['indices_pos'])
         print("\n")
 
-def make_voc_custom_dataset():
+def make_voc_custom_dataset(datasetName='lanzhou'):
     from tensorgroup.models.dataset.voc import voc_custom
-    ann_dir, img_dir, tfr_dir = "./data_voc/Annotations", "./data_voc/Annotations", "./data_voc/tf_records"
-    voc_custom.dataset2tfrecord(ann_dir, img_dir, tfr_dir, ModeKey.TRAIN)
+    prefix = os.path.join(os.getcwd(), 'data_voc', datasetName)
+    ann_dir = os.path.join(prefix, "Annotations")
+    img_dir = os.path.join(prefix, "Annotations")
+    tfr_dir = os.path.join(prefix, "tf_records")
+    voc_custom.dataset2tfrecord(ann_dir, img_dir, tfr_dir, ModeKey.TRAIN, datasetName=datasetName)
 
-def about_dataset_voc_custom():
+def about_dataset_voc_custom(datasetName='lanzhou'):
     from tensorgroup.models.dataset.centernet_inputs import DefineInputs
     from tensorgroup.models.dataset.voc import voc_custom
-    tfr_dir = "./data_voc/tf_records"
+    tfr_dir = os.path.join(os.getcwd(), "data_voc", datasetName, "tf_records")
     inputs_definer = DefineInputs
-    dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
+    dataset = voc_custom.VocCustomInput(tfr_dir, datasetName=datasetName, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=10000)
     # dataset 来的输入如下:（参见centernet_inputs.py）
     # {'image': image,
     #  'indices': indices,
@@ -87,10 +93,9 @@ def about_dataset_voc_custom():
     #  'shape': shape,
     #  'center_keypoint_heatmap': center_keypoint_heatmap,
     #  'center_keypoint_mask': center_keypoint_mask}
-
     for inputs, targets in dataset(centernet_input_config):
         print(tf.shape(inputs['image']))
-        print(tf.shape(inputs['indices']))
+        print(tf.shape(inputs['indices_pos']))
         print(tf.shape(inputs['indices_mask']))
         print(tf.shape(inputs['center_offset']))
         print(tf.shape(inputs['shape']))
@@ -108,23 +113,25 @@ def repair_data(ann_dir):
         path.text = image_name.text
         xml.write(xmlpath)
 
-def train():
+def train(datasetName="lanzhou"):
     from tensorgroup.models.dataset.centernet_inputs import DefineInputs
     from tensorgroup.models.dataset.voc import voc_custom
     from tensorgroup.models.networks import CenterNetBuilder as CNB
 
-    checkpoint_dir = os.path.join(os.getcwd(), 'work', 'centernet', 'ckpt')
-    saved_model_dir = os.path.join(os.getcwd(), 'work', 'centernet', 'sm')
+    checkpoint_dir = os.path.join(os.getcwd(), 'work', 'centernet', datasetName, 'ckpt')
+    saved_model_dir = os.path.join(os.getcwd(), 'work', 'centernet', datasetName, 'sm')
     if not os.path.exists(checkpoint_dir):   # model_dir 不应出现这种情况.
         os.makedirs(checkpoint_dir)
     if not os.path.exists(saved_model_dir):   # model_dir 不应出现这种情况.
         os.makedirs(saved_model_dir)
 
-    tfr_dir = os.path.join(os.getcwd(), 'data_voc', 'tf_records')  # "./data_voc/tf_records"
+    tfr_dir = os.path.join(os.getcwd(), 'data_voc', datasetName, 'tf_records')  # "./data_voc/tf_records"
     inputs_definer = DefineInputs
-    dataset = voc_custom.VocCustomInput(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=-1, repeat_num=2, buffer_size=10000)
-    train_model, _, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes))
-    train_model.summary()
+    dataset = voc_custom.VocCustomInput(tfr_dir, datasetName=datasetName, inputs_definer=inputs_definer, batch_size=2, num_exsamples=-1, repeat_num=2, buffer_size=10000)
+    train_model, _, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes[datasetName]),
+                                                                   input_size=I_SIZE,
+                                                                   input_channels=I_CH)  # I_CH
+    # train_model.summary()
 
     def center_loss(y_true, y_pred):
         return y_pred
@@ -137,39 +144,45 @@ def train():
     if latest is not None:
         train_model.load_weights(latest)
     train_model.fit(dataset(centernet_input_config), epochs=1000, callbacks=[cp_callback])
-    train_model.save(os.path.join(saved_model_dir, 'tiexie_model.h5'))
+    train_model.save(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)))
 
-def load_image(image_index):
+def load_image(images_dir, image_index):
     """
     Load an image at the image_index.
     """
-    path = os.path.join(os.getcwd(), 'data_voc', 'JPEGImages', '({}).jpg'.format(image_index))
+    path = os.path.join(images_dir, '({}).jpg'.format(image_index))
     print(path)
     image = cv2.imread(path)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     return image
 
-def predict():
-    saved_model_dir = os.path.join(os.getcwd(), 'work', 'centernet', 'sm')
+def predict(datasetName='lanzhou'):
+    saved_model_dir = os.path.join(os.getcwd(), 'work', 'centernet', datasetName, 'sm')
+    images_dir = os.path.join(os.getcwd(), 'data_voc', datasetName, 'JPEGImages')
 
     from tensorgroup.models.networks import CenterNetBuilder as CNB
     from tensorgroup.models.dataset.voc import voc_custom
 
-    _, predict_model, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes), score_threshold=0.01)
+    _, predict_model, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes[datasetName]),
+                                                                     input_size=I_SIZE,
+                                                                     input_channels=I_CH,
+                                                                     score_threshold=0.01)
 
-    predict_model.load_weights(os.path.join(saved_model_dir, 'tiexie_model.h5'), by_name=True, skip_mismatch=True)
-    for index in range(254, 257):
-        image = load_image(index)
+    predict_model.load_weights(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)), by_name=True, skip_mismatch=True)
+    for index in range(260, 261):
+        image = load_image(images_dir, index)
+        image_size = image.shape[0]   # 作了假设的哈：image.shape[2]=I_CH，偷懒。Bad smell
+
         image_t = tf.convert_to_tensor(image)
         image_t = voc_custom.VocCustomInput.ImageNormalizer()(image_t)
-        print(tf.reduce_max(image_t))
-        image_t = tf.image.resize(image_t, [512, 512], method=tf.image.ResizeMethod.BILINEAR)
+        image_t = tf.image.resize(image_t, centernet_input_config['network_input_shape'], method=tf.image.ResizeMethod.BILINEAR)
         image_input = tf.expand_dims(image_t, axis=0)
         predicts = predict_model.predict(image_input)[0]
         scores = predicts[:, 4]
         indices = np.where(scores > 0.1)
         detections = predicts[indices].copy()
         print(detections.shape)
-        scale = (512 / 256) * (128 / 512)
+        scale = (I_SIZE / image_size) * 0.25  # 注意
         for detection in detections:
             xmin = int(round(detection[0])/scale)
             ymin = int(round(detection[1])/scale)
@@ -177,7 +190,7 @@ def predict():
             ymax = int(round(detection[3])/scale)
             # score = '{:.4f}'.format(detection[4])
             # class_id = int(detection[5])
-            cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (255, 0, 0), 1)
+            cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (255, 0, 0), 6)
         # cv2.namedWindow('image', cv2.WINDOW_NORMAL)
         # cv2.imshow("image", image)
         plt.imshow(image)
@@ -188,7 +201,8 @@ if __name__ == '__main__':
     # about_dataset_voc()
     # repair_data("./data_voc/Annotations/")
     # tf.executing_eagerly()
-    # make_voc_custom_dataset()
-    # about_dataset_voc_custom()
-    # train()
-    predict()
+    # make_voc_custom_dataset(datasetName='catenary')
+    # about_dataset_voc_custom(datasetName='catenary')
+    # train('catenary')
+    # predict()
+    predict(datasetName='catenary')
