@@ -9,6 +9,7 @@ from matplotlib import pyplot as plt
 
 import numpy as np
 import cv2
+from PIL import Image, ImageDraw
 import tensorflow as tf
 import tensorflow.keras as K
 from lxml import etree
@@ -108,9 +109,18 @@ def repair_data(ann_dir):
     for xmlpath in xmllist:
         xml = etree.parse(xmlpath)
         root = xml.getroot()
-        image_name = root.find('filename')
+        filename = root.find('filename')
         path = root.find('path')
-        path.text = image_name.text
+        path.text = filename.text
+        depth = root.find('size').find('depth')
+        depth.text = '3'
+        # xml.write(xmlpath)
+        for child in root:
+            if child.tag == 'object':
+                name = child.find('name')
+                if name.text.find('clamp') > -1 or name.text.find('wire') > -1:
+                    name.text = 'holder'
+                    print(name.text)
         xml.write(xmlpath)
 
 def train(datasetName="lanzhou"):
@@ -136,14 +146,14 @@ def train(datasetName="lanzhou"):
     def center_loss(y_true, y_pred):
         return y_pred
 
-    train_model.compile(optimizer=KO.Adam(lr=1e-3), loss={'loss_as_output': center_loss})
+    train_model.compile(optimizer=KO.Adam(lr=1e-4), loss={'loss_as_output': center_loss})
 
     checkpoint_path = os.path.join(checkpoint_dir, 'cp.ckpt')
     cp_callback = K.callbacks.ModelCheckpoint(filepath=checkpoint_path, save_weights_only=True, verbose=1, save_freq='epoch')
     latest = tf.train.latest_checkpoint(checkpoint_dir)
     if latest is not None:
         train_model.load_weights(latest)
-    train_model.fit(dataset(centernet_input_config), epochs=1000, callbacks=[cp_callback])
+    train_model.fit(dataset(centernet_input_config), epochs=200, callbacks=[cp_callback])
     train_model.save(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)))
 
 def load_image(images_dir, image_index):
@@ -151,14 +161,23 @@ def load_image(images_dir, image_index):
     Load an image at the image_index.
     """
     path = os.path.join(images_dir, '({}).jpg'.format(image_index))
-    print(path)
-    image = cv2.imread(path)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    return image
+    # image = cv2.imread(path)
+    # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    image = Image.open(path)
+    image = image.convert("RGB")
+    return np.array(image)
+
+def save_image(images_dir, image, i, j):
+    path = os.path.join(images_dir, '({}-{}).jpg').format(i, j)
+    # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    # cv2.imwrite(path, image)
+    image = Image.fromarray(image)
+    image.save(path)
+    return
 
 def predict(datasetName='lanzhou'):
     saved_model_dir = os.path.join(os.getcwd(), 'work', 'centernet', datasetName, 'sm')
-    images_dir = os.path.join(os.getcwd(), 'data_voc', datasetName, 'JPEGImages')
+    images_dir = os.path.join(os.getcwd(), 'data_voc', datasetName, 'TestImages')
 
     from tensorgroup.models.networks import CenterNetBuilder as CNB
     from tensorgroup.models.dataset.voc import voc_custom
@@ -169,11 +188,13 @@ def predict(datasetName='lanzhou'):
                                                                      score_threshold=0.01)
 
     predict_model.load_weights(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)), by_name=True, skip_mismatch=True)
-    for index in range(260, 261):
-        image = load_image(images_dir, index)
-        image_size = image.shape[0]   # 作了假设的哈：image.shape[2]=I_CH，偷懒。Bad smell
+    for index in range(262, 266):
+        image_array = load_image(images_dir, index)
+        image = Image.fromarray(image_array)
+        draw = ImageDraw.Draw(image)
+        image_size = image_array.shape[0]   # 作了假设的哈：image.shape[2]=I_CH，偷懒。Bad smell
 
-        image_t = tf.convert_to_tensor(image)
+        image_t = tf.convert_to_tensor(image_array)
         image_t = voc_custom.VocCustomInput.ImageNormalizer()(image_t)
         image_t = tf.image.resize(image_t, centernet_input_config['network_input_shape'], method=tf.image.ResizeMethod.BILINEAR)
         image_input = tf.expand_dims(image_t, axis=0)
@@ -190,19 +211,62 @@ def predict(datasetName='lanzhou'):
             ymax = int(round(detection[3])/scale)
             # score = '{:.4f}'.format(detection[4])
             # class_id = int(detection[5])
-            cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (255, 0, 0), 6)
-        # cv2.namedWindow('image', cv2.WINDOW_NORMAL)
-        # cv2.imshow("image", image)
+            # cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (255, 0, 0), 6)
+            draw.rectangle((xmin, ymin, xmax, ymax), fill=None, outline=(255, 0, 0), width=6)
         plt.imshow(image)
         plt.show()
 
 
+def save_detection(datasetName='lanzhou'):
+    saved_model_dir = os.path.join(os.getcwd(), 'work', 'centernet', datasetName, 'sm')
+    images_dir = os.path.join(os.getcwd(), 'data_voc', datasetName, 'TestImages')
+    d_patch_dir = os.path.join(os.getcwd(), 'work', 'centernet', datasetName, 'detected_paches')
+    if not os.path.exists(d_patch_dir):   # model_dir 不应出现这种情况.
+        os.makedirs(d_patch_dir)
+
+    from tensorgroup.models.networks import CenterNetBuilder as CNB
+    from tensorgroup.models.dataset.voc import voc_custom
+
+    _, predict_model, _ = CNB.CenterNetBuilder.CenterNetOnResNet50V2(len(voc_custom.voc_custom_classes[datasetName]),
+                                                                     input_size=I_SIZE,
+                                                                     input_channels=I_CH,
+                                                                     score_threshold=0.01)
+
+    predict_model.load_weights(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)), by_name=True, skip_mismatch=True)
+    for index in range(254, 266):
+        image_array = load_image(images_dir, index)
+        image_size = image_array.shape[0]   # 作了假设的哈, 偷懒。Bad smell
+
+        image_t = tf.convert_to_tensor(image_array)
+        image_t = voc_custom.VocCustomInput.ImageNormalizer()(image_t)
+        image_t = tf.image.resize(image_t, centernet_input_config['network_input_shape'], method=tf.image.ResizeMethod.BILINEAR)
+        image_input = tf.expand_dims(image_t, axis=0)
+        predicts = predict_model.predict(image_input)[0]
+        scores = predicts[:, 4]
+        indices = np.where(scores > 0.1)
+        detections = predicts[indices].copy()
+        print(detections.shape)
+        scale = (I_SIZE / image_size) * 0.25  # 注意
+        d_patches = []
+        for detection in detections:
+            xmin = int(round(detection[0])/scale)
+            ymin = int(round(detection[1])/scale)
+            xmax = int(round(detection[2])/scale)
+            ymax = int(round(detection[3])/scale)
+            d_patch = image_array[ymin:ymax+1, xmin:xmax+1, :].copy()
+            d_patches.append(d_patch)
+        for j in range(len(d_patches)):
+            patch_size = d_patches[j].shape
+            if patch_size[0] > 31 and patch_size[1] > 31:
+                save_image(d_patch_dir, d_patches[j], index, j)
+
+
 if __name__ == '__main__':
     # about_dataset_voc()
-    # repair_data("./data_voc/Annotations/")
+    # repair_data("./data_voc/catenary/Annotations/")
     # tf.executing_eagerly()
     # make_voc_custom_dataset(datasetName='catenary')
     # about_dataset_voc_custom(datasetName='catenary')
     # train('catenary')
-    # predict()
-    predict(datasetName='catenary')
+    # predict(datasetName='catenary')
+    save_detection(datasetName='catenary')

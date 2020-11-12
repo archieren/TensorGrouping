@@ -7,6 +7,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 import tensorgroup.models.networks.ResnetBuilder as RB
+import tensorgroup.models.networks.layers.sa as SA
 
 KA = keras.applications
 KL = keras.layers

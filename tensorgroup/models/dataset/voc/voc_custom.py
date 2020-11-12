@@ -68,13 +68,13 @@ def xml_to_example(xmlpath, imgpath, classes):
     size = root.find('size')
     height = int(size.find('height').text)
     width = int(size.find('width').text)
-    depth = int(size.find('depth').text)
+    depth = int(size.find('depth').text)      # labelImg 有bug，它保存的depth有问题，因此标记数据后，我有个修复操作。
     shape = np.asarray([height, width, depth], np.int32)
     xpath = xml.xpath('//object')
     ground_truth = np.zeros([len(xpath), 5], np.float32)
     for i in range(len(xpath)):
         obj = xpath[i]
-        print(obj.find('name').text)
+        # print(obj.find('name').text)
         classid = classes[obj.find('name').text]
         bndbox = obj.find('bndbox')
         ymin = int(bndbox.find('ymin').text)
@@ -89,7 +89,7 @@ def xml_to_example(xmlpath, imgpath, classes):
                                          classid],
                                         np.float32)
     features = {
-        'image': bytes_feature(image),
+        'image': bytes_feature(image),   # 注意image是没有解析的。以后用tf.io.decode_jpeg来解析， 避免BGR、RGB搞不清的格式问题。
         'shape': bytes_feature(shape.tobytes()),
         'ground_truth': bytes_feature(ground_truth.tobytes())
     }
@@ -162,7 +162,7 @@ class VocCustomInput:
                 'shape': tf.io.FixedLenFeature([], tf.string),
                 'ground_truth': tf.io.FixedLenFeature([], tf.string)
             })
-            shape = tf.io.decode_raw(features['shape'], tf.int32)
+            # shape = tf.io.decode_raw(features['shape'], tf.int32)
             ground_truth = tf.io.decode_raw(features['ground_truth'], tf.float32)
             # shape = tf.reshape(shape, [3])  # 可能原始XML中有关shape的信息不准，导致这儿的shape里的信息不可用。
             ground_truth = tf.reshape(ground_truth, [-1, 5])

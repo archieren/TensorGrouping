@@ -2,6 +2,7 @@ from __future__ import division
 
 
 import tensorflow as tf
+import tensorgroup.models.networks.layers.sa as SA
 
 KL = tf.keras.layers
 KM = tf.keras.models
@@ -188,6 +189,7 @@ class ResnetBuilder(object):
             block = _residual_block(block_fn, filters=filters, repetitions=r, is_first_layer=(i == 0))(block)
             filters *= 2
 
+        block = SA.Attention(2048)(block)
         # Last activation
         block = _bn_relu(block)
         if not include_top:

@@ -96,7 +96,7 @@ def predict():
     saved_model_dir = os.path.join(os.getcwd(), 'work', 'u_2_net_p', 'sm')
     model = U2B.U2netBuilder.u_2_net_p(input_shape=(I_SIZE, I_SIZE, 3))
     model.load_weights(os.path.join(saved_model_dir, 'catenary_model.h5'), by_name=True, skip_mismatch=True)
-    path = os.path.join(os.getcwd(), 'data_u_2_mask', 'catenary', 'TestImages', '5.jpg')
+    path = os.path.join(os.getcwd(), 'data_u_2_mask', 'catenary', 'TestImages', '9.jpg')
     image = cv2.imread(path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image_t = tf.convert_to_tensor(image)
