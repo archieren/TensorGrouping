@@ -185,15 +185,15 @@ class VocCustomInput:
         def __call__(self, image):
             """Normalizes the image to zero mean and unit variance."""
             image = tf.image.convert_image_dtype(image, dtype=tf.float32)
-            offset = tf.constant(self._offset)
-            offset = tf.expand_dims(offset, axis=0)
-            offset = tf.expand_dims(offset, axis=0)
-            image -= offset
+            # offset = tf.constant(self._offset)
+            # offset = tf.expand_dims(offset, axis=0)
+            # offset = tf.expand_dims(offset, axis=0)
+            # image -= offset
 
-            scale = tf.constant(self._scale)
-            scale = tf.expand_dims(scale, axis=0)
-            scale = tf.expand_dims(scale, axis=0)
-            image /= scale
+            # scale = tf.constant(self._scale)
+            # scale = tf.expand_dims(scale, axis=0)
+            # scale = tf.expand_dims(scale, axis=0)
+            # image /= scale
             return image
 
     def __call__(self, network_input_config):

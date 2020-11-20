@@ -63,26 +63,21 @@ def svg_preamble(s):
     </defs>
     """)
 
-def gen_moire():
-    s = []
-    svg_preamble(s)
 
-    # Angle of rotation of the lattices (degrees)
-    th = 10
-    # An internal variable to offset every other row of the unit cells when drawing
-    _ph = 0
+s = []
+svg_preamble(s)
 
-    for iy in range(ny):
-        _ph = 0 if _ph else gx
-        for ix in range(nx):
-            add_unit_cell(s, ix*2*gx + _ph, iy*(a+gy), cls='lattice1')
-            add_unit_cell(s, ix*2*gx + _ph, iy*(a+gy), np.radians(th), 'lattice2')
+# Angle of rotation of the lattices (degrees)
+th = 10
+# An internal variable to offset every other row of the unit cells when drawing
+_ph = 0
+for iy in range(ny):
+    _ph = 0 if _ph else gx
+    for ix in range(nx):
+        add_unit_cell(s, ix*2*gx + _ph, iy*(a+gy), cls='lattice1')
+        add_unit_cell(s, ix*2*gx + _ph, iy*(a+gy), np.radians(th), 'lattice2')
 
-    s.append('</svg>')
+s.append('</svg>')
 
-    with open('lattice.svg', 'w') as fo:
-        print('\n'.join(s), file=fo)
-
-
-print("hello\n")
-gen_moire()
+with open('./data_moire/lattice.svg', 'w') as fo:
+    print('\n'.join(s), file=fo)

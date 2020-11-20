@@ -1,5 +1,8 @@
 import os
-import cv2
+# import cv2
+from skimage import filters
+import numpy as np
+from PIL import Image, ImageDraw
 from matplotlib import pyplot as plt
 
 import tensorflow as tf  # TF 2.0
@@ -43,16 +46,16 @@ u_2_net_input_config = {
 # y = model(x)
 # model.summary()
 
-def make_dataset():
-    root = './data_u_2_mask/catenary/'
+def make_dataset(dataset='catenary'):
+    root = os.path.join(os.getcwd(), 'data_u_2_mask', dataset)  # './data_u_2_mask/catenary/'
     img_dir = os.path.join(root, 'JPEGImages')
     mask_ann_dir = os.path.join(root, 'Annotations')
     output_dir = os.path.join(root, 'tf_records')
     mask.dataset2tfrecord(img_dir, mask_ann_dir, output_dir, ModeKey.TRAIN)
     return
 
-def about_mask_dataset():
-    tfr_dir = "./data_u_2_mask/catenary/tf_records"
+def about_mask_dataset(dataset='catenary'):
+    tfr_dir = os.path.join(os.getcwd(), 'data_u_2_mask', dataset, 'tf_records')  # "./data_u_2_mask/catenary/tf_records"
     inputs_definer = DefineInputs
     dataset = mask.MaskInputs(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=200, repeat_num=1, buffer_size=1000)
 
@@ -62,13 +65,13 @@ def about_mask_dataset():
 
 # about_mask_dataset()
 
-def train():
-    tfr_dir = "./data_u_2_mask/catenary/tf_records"
+def train(dataset='catenary', model_t='u_2_net_p'):
+    tfr_dir = os.path.join(os.getcwd(), 'data_u_2_mask', dataset, 'tf_records')  # "./data_u_2_mask/catenary/tf_records"
     inputs_definer = DefineInputs
-    dataset = mask.MaskInputs(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=-1, repeat_num=2, buffer_size=1000)
+    trainset = mask.MaskInputs(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=-1, repeat_num=2, buffer_size=1000)
 
-    checkpoint_dir = os.path.join(os.getcwd(), 'work', 'u_2_net_p', 'ckpt')
-    saved_model_dir = os.path.join(os.getcwd(), 'work', 'u_2_net_p', 'sm')
+    checkpoint_dir = os.path.join(os.getcwd(), 'work', model_t, dataset, 'ckpt')
+    saved_model_dir = os.path.join(os.getcwd(), 'work', model_t, dataset, 'sm')
     if not os.path.exists(checkpoint_dir):   # model_dir 不应出现这种情况.
         os.makedirs(checkpoint_dir)
     if not os.path.exists(saved_model_dir):   # model_dir 不应出现这种情况.
@@ -82,8 +85,8 @@ def train():
     latest = tf.train.latest_checkpoint(checkpoint_dir)
     if latest is not None:
         train_model.load_weights(latest)
-    train_model.fit(dataset(u_2_net_input_config), epochs=200, callbacks=[cp_callback])
-    train_model.save(os.path.join(saved_model_dir, 'catenary_model.h5'))
+    train_model.fit(trainset(u_2_net_input_config), epochs=200, callbacks=[cp_callback])
+    train_model.save(os.path.join(saved_model_dir, '{}_model.h5'.format(dataset)))
 
 
 def normPred(p):
@@ -92,13 +95,17 @@ def normPred(p):
     p = (p - min)/(max - min)
     return p
 
-def predict():
-    saved_model_dir = os.path.join(os.getcwd(), 'work', 'u_2_net_p', 'sm')
+
+def predict(dataset='catenary', model_t='u_2_net_p'):
+    saved_model_dir = os.path.join(os.getcwd(), 'work', model_t, dataset, 'sm')
     model = U2B.U2netBuilder.u_2_net_p(input_shape=(I_SIZE, I_SIZE, 3))
-    model.load_weights(os.path.join(saved_model_dir, 'catenary_model.h5'), by_name=True, skip_mismatch=True)
-    path = os.path.join(os.getcwd(), 'data_u_2_mask', 'catenary', 'TestImages', '9.jpg')
-    image = cv2.imread(path)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    model.load_weights(os.path.join(saved_model_dir, '{}_model.h5'.format(dataset)), by_name=True, skip_mismatch=True)
+    path = os.path.join(os.getcwd(), 'data_u_2_mask', dataset, 'TestImages', '3.jpg')
+    image = Image.open(path)
+    image = image.convert("RGB")
+    image = np.array(image)
+    # image = cv2.imread(path)
+    # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image_t = tf.convert_to_tensor(image)
     image_t = mask.MaskInputs.ImageNormalizer()(image_t)
     print(tf.reduce_max(image_t))

@@ -153,7 +153,7 @@ def train(datasetName="lanzhou"):
     latest = tf.train.latest_checkpoint(checkpoint_dir)
     if latest is not None:
         train_model.load_weights(latest)
-    train_model.fit(dataset(centernet_input_config), epochs=200, callbacks=[cp_callback])
+    train_model.fit(dataset(centernet_input_config), epochs=888, callbacks=[cp_callback])
     train_model.save(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)))
 
 def load_image(images_dir, image_index):
