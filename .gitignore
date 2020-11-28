@@ -1,5 +1,6 @@
 work/
 data/
+data_coco/
 data_moire/
 data_voc/
 data_u_2_mask/

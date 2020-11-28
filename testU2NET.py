@@ -111,8 +111,9 @@ def predict(dataset='catenary', model_t='u_2_net_p'):
     print(tf.reduce_max(image_t))
     image_t = tf.image.resize(image_t, [1024, 1024], method=tf.image.ResizeMethod.BILINEAR)
     image_input = tf.expand_dims(image_t, axis=0)
-    predict = model.predict(image_input)[0]
-    # predict = normPred(predict)
+    predict = model.predict(image_input)[0]  # 看说明， model predict返回的是numpy array?
+    predict = Image.fromarray((predict * 255).reshape([1024, 1024]))
+    print(predict.mode)
     plt.imshow(predict)
     plt.show()
     pass

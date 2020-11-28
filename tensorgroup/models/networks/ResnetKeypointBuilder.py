@@ -47,11 +47,21 @@ class ResnetKeypointBuilder(object):
         x = resnet.output
         x = KL.Dropout(rate=0.5)(x)
         # 32*ResNetOutputSize = input_size
-        x = ResnetKeypointBuilder.make_deconv_layers(num_layers=5, num_filters=[512, 256, 128, 64, 32])(x)
+        x = ResnetKeypointBuilder.make_deconv_layers(num_layers=3, num_filters=[256, 128, 64])(x)
         # (2**num_layers)*ResNetOutputSize = ResnetKeypointOutputSize
+        # heatmap
+        heatmap = KL.Conv2D(64, 3, padding='same')(x)
+        heatmap = KL.BatchNormalization()(heatmap)
+        heatmap = KL.ReLU()(heatmap)
         heatmap = KL.Conv2D(filters=num_outputs, kernel_size=(1, 1), padding="same", use_bias=False, strides=1, name="heatmap")(x)
 
-        model = KM.Model(inputs=input, outputs=heatmap)
+        # reg header -- center_offset
+        center_offset = KL.Conv2D(64, 3, padding='same')(x)
+        center_offset = KL.BatchNormalization()(center_offset)
+        center_offset = KL.ReLU()(center_offset)
+        center_offset = KL.Conv2D(filters=2, kernel_size=(1, 1), padding="same", use_bias=False, strides=1, name="center_offset")(center_offset)
+
+        model = KM.Model(inputs=input, outputs=[heatmap, center_offset])
         return model
 
     @staticmethod

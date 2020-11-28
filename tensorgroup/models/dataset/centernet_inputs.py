@@ -122,7 +122,7 @@ class DefineInputs:
     def _gen_center_round_and_center_offset_and_shape_offset(self, ground_truth):
         network_input_shape = self._config['network_input_shape']
         (i_h, i_w) = network_input_shape
-        (f_h, f_w) = (int(i_h/4), int(i_w/4))
+        (f_h, f_w) = (int(i_h/STRIDE), int(i_w/STRIDE))
         c_y = ground_truth[..., 0] * f_h
         c_x = ground_truth[..., 1] * f_w
         c_h = ground_truth[..., 2] * f_h
@@ -160,6 +160,9 @@ def gaussian2D_tf_at_any_point(c_num, c_y, c_x, c_h, c_w, f_h, f_w):
     center_keypoint_heatmap = tf.exp(-((c_y-mesh_y)**2+(c_x-mesh_x)**2)/(2*sigma**2))
     return center_keypoint_heatmap
 
+
+# 下面可以看到如何为网格赋予坐标的技巧！
+# np.ogrid 和 tf.meshgrid的作用可以琢磨一下.
 def gaussian2D(shape, sigma=1):
     # m, n = [(ss - 1.) / 2. for ss in shape]
     m, n = (shape[0]-1.)/2, (shape[1]-1.)/2
@@ -178,8 +181,7 @@ def gaussian2D_tf(shape, sigma=1):
     x = tf.range(-n, n+1, dtype=tf.float32)
     [n_x, m_y] = tf.meshgrid(x, y)
 
-    h = tf.exp(-(x * x + y * y) / (2 * sigma * sigma))
-    # h[h < np.finfo(h.dtype).eps * h.max()] = 0
+    h = tf.exp(-(n_x ** 2 + m_y ** 2) / (2 * sigma ** 2))
     return h
 
 def gaussian_radius_tf(height, width, min_overlap=0.7):

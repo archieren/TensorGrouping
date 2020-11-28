@@ -32,7 +32,7 @@ os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 image_shape = (224, 224, 3)
 
 def about_model_ResnetKeypoint():
-    modelP = RKB.build_keypoint_resnet_50(input_shape=(224, 224, 3), num_outputs=10)
+    modelP = RKB.build_keypoint_resnet_50(input_shape=(None, None, 3), num_outputs=10)
     modelP.summary()
 
 def about_model_BageNet():
@@ -242,7 +242,7 @@ def example():
     # print(imagenet2012_train)
     # for images, _ in imagenet2012_train.batch(32):
     #     print(images.shape)
-    modelB = BB.build_bagnet_N(3, 1000 )
+    modelB = BB.build_bagnet_N(3, 1000)
     modelB.compile(optimizer=tf.keras.optimizers.RMSprop(0.001),
                    loss='sparse_categorical_crossentropy',
                    metrics=['sparse_categorical_accuracy'])
@@ -259,6 +259,16 @@ def about_video_stream():
             break
     cv2.destroyAllWindows()
     cap.release()
+
+def about_gaussion2D_tf():
+    import tensorgroup.models.dataset.centernet_inputs as CI
+    from PIL import Image
+    gau = CI.gaussian2D_tf([101, 101], sigma=11)
+    gau = gau.numpy()
+    # 不太清楚的是, Pillow在mode='F' 和 mode='L'间的转换似乎要注意下.
+    gau = Image.fromarray(gau*255)
+    plt.imshow(gau)
+    plt.show()
 
 
 """
@@ -285,14 +295,15 @@ image_filtered = tf.nn.separable_conv2d(
 """
 if __name__ == '__main__':
     # about_dataset_voc()
-    example()
+    # example()
     # about_dataset_imagenet2012()
     # about_model_BageNet()
-    # about_model_ResnetKeypoint()
+    about_model_ResnetKeypoint()
     # about_keras_model_ResNet50V2()
     # about_keras_model_CenterNet("pred")
     # about_keras_model_InceptionResNetV2()
     # about_dataset_coco()
     # about_dataset_fashion_mnist()
     # about_coco_api()
+    # about_gaussion2D_tf()
     # about_video_stream()
