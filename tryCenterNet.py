@@ -268,5 +268,5 @@ if __name__ == '__main__':
     # make_voc_custom_dataset(datasetName='catenary')
     # about_dataset_voc_custom(datasetName='catenary')
     # train('catenary')
-    # predict(datasetName='catenary')
-    save_detection(datasetName='catenary')
+    predict(datasetName='catenary')
+    # save_detection(datasetName='catenary')

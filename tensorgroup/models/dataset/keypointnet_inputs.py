@@ -35,21 +35,20 @@ class DefineInputs:
         Returns: 将loss里需要的输入全部事先计算出来
             image: Resized image.
             ground_truth：Padded Groundtruth.
-            center_round, center_offset, shape_offset, center_keypoint_heatmap, center_keypoint_mask:看网络的介绍.
+            center_round, center_offset, center_keypoint_heatmap, center_keypoint_mask:看网络的介绍.
 
         """
         image, ground_truth = image_augmentor(image=image,
                                               ground_truth=ground_truth,
                                               **self._config
                                               )
-        # ground_truth: [y_center, x_center, height, width, classid]
-        indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
+        # ground_truth: [y_center, x_center, point_size, point_size, classid]
+        indices, indices_mask, center_offset, center_keypoint_heatmap, center_keypoint_mask = self._def_inputs(image, ground_truth)
         # 在这个地方，有必要给些注释：Model.fit 对 DataSet输入格式，是有要求的！
         return ({'image': image,
                  'indices_pos': indices,
                  'indices_mask': indices_mask,
                  'center_offset': center_offset,
-                 'shape': shape,
                  'center_keypoint_heatmap': center_keypoint_heatmap,
                  'center_keypoint_mask': center_keypoint_mask},
                 {'loss_as_output': tf.constant([1.0])})
@@ -67,8 +66,8 @@ class DefineInputs:
                center_keypoint_mask: [num_classes, feature_map_height, feature_map_width]
         """
         center_keypoint_heatmap, center_keypoint_mask = self._gen_center_keypoint_heatmap(ground_truth)
-        indices, indices_mask, center_offset, shape = self._gen_center_round_and_center_offset_and_shape_offset(ground_truth)
-        return indices, indices_mask, center_offset, shape, center_keypoint_heatmap, center_keypoint_mask
+        indices, indices_mask, center_offset = self._gen_center_round_and_center_offset_and_shape_offset(ground_truth)
+        return indices, indices_mask, center_offset, center_keypoint_heatmap, center_keypoint_mask
 
     def _gen_center_keypoint_heatmap(self, ground_truth):
         network_input_shape = self._config['network_input_shape']
@@ -134,7 +133,7 @@ class DefineInputs:
         # center_round = tf.cast(center_round, dtype=tf.int64)  # tf.int64 是必需的！
         # indices = center_round
 
-        shape = tf.concat([tf.expand_dims(c_h, axis=-1), tf.expand_dims(c_w, axis=-1)], axis=-1)
+        # shape = tf.concat([tf.expand_dims(c_h, axis=-1), tf.expand_dims(c_w, axis=-1)], axis=-1)
         # shape_round = tf.floor(shape)
         # shape_offset = shape - shape_round
 
@@ -143,7 +142,7 @@ class DefineInputs:
         indices = center_round * t_mask
         indices = tf.cast(indices, dtype=tf.int64)
 
-        return indices, indices_mask, center_offset, shape
+        return indices, indices_mask, center_offset
 
 def gaussian2D_tf_at_any_point(c_num, c_y, c_x, c_h, c_w, f_h, f_w):
     sigma = gaussian_radius_tf(c_h, c_w)

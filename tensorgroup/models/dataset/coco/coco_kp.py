@@ -14,13 +14,8 @@ from typing import Text, Optional
 from tensorgroup.models.dataset.keypointnet_inputs import DefineInputs
 from tensorgroup.models.dataset import mode_keys as ModeKey
 
-NUM_JOINTS = 2
-CHANNELS = 3
-IMAGE_SIZE = 32*7
-HEAT_MAP_SIZE = 8*7
-SIGMA = 2
-
-
+POINT_RADIUS = 5  # 5的来源：点当作11*11的对象。这样可使得尽量重用centernet中的代码.
+TFR_PATTERN = '{}*.tfrecord'
 # dataset_utils
 
 def int64_feature(values):
@@ -41,6 +36,7 @@ def float_feature(values):
     return tf.train.Feature(bytes_list=tf.train.FloatList(value=values))
 
 
+PC_NUMBERS = 2
 PC = {
     'point_1': 0,
     'point_2': 1,
@@ -62,6 +58,8 @@ def get_annotations_dict(annotation_json_path):
     shapes = json_text.get('shapes', None)
     if shapes is None:
         return None
+    im_w = json_text.get('imageWidth')
+    im_h = json_text.get('imageHeight')
 
     base64_data = json_text.get('imageData')
     encoded_jpg = base64.b64decode(base64_data)
@@ -73,12 +71,12 @@ def get_annotations_dict(annotation_json_path):
             continue
 
         pc = PC[mark.get('label')]
-        [x, y] = np.array(mark.get('points'), dtype=np.int)[0]
-
-        points.append([x, y, pc])  # 一维N*3个元素.
+        [c_x, c_y] = np.array(mark.get('points'), dtype=np.int)[0]
+        ymin, ymax, xmin, xmax = (c_y - POINT_RADIUS)/im_h, (c_y + POINT_RADIUS)/im_h, (c_x - POINT_RADIUS)/im_w, (c_x + POINT_RADIUS)/im_w
+        points.append([ymin, ymax, xmin, xmax, pc])  # 一维N*5个元素.
 
     annotation_dict = {'encoded_jpg': encoded_jpg,
-                       'points': np.array(points, dtype=np.int32)}
+                       'points': np.array(points, dtype=np.float32)}
     return annotation_dict
 
 
@@ -111,10 +109,6 @@ def produce_dataset_from_jsons(dataset_name, json_source_dir, target_directory):
 
 
 class CocoKpInput:
-    """
-    基本上将VocCustomInput和VocInput重构了差不多了，后面想把他们基类化，看时间吧！
-    """
-
     def __init__(self,
                  tfrecords_dir,
                  datasetName='three_point',
@@ -133,7 +127,7 @@ class CocoKpInput:
         self._repeat_num = repeat_num
         self._buffer_size = buffer_size
         #
-        self._num_classes = 2        # 点的类型数，这个地方需要可配置。
+        self._num_classes = PC_NUMBERS        # 点的类型数，这个地方需要可配置。
         self._max_objects = max_objects  # 允许的点对象最大个数。
         self._inputs_definer = inputs_definer
 
@@ -148,8 +142,8 @@ class CocoKpInput:
                 'ground_truth': tf.io.FixedLenFeature([], tf.string)
             })
             # shape = tf.io.decode_raw(features['shape'], tf.int32)
-            ground_truth = tf.io.decode_raw(features['ground_truth'], tf.int32)
-            ground_truth = tf.reshape(ground_truth, [-1, 3])
+            ground_truth = tf.io.decode_raw(features['ground_truth'], tf.float32)
+            ground_truth = tf.reshape(ground_truth, [-1, 5])
             image = tf.io.decode_jpeg(features['image'])
             # image = tf.reshape(image, shape)
             if self._image_normalizer is not None:
@@ -182,6 +176,7 @@ class CocoKpInput:
 
     def __call__(self, network_input_config):
         tfrecords = tf.io.gfile.glob(os.path.join(self._tfrecords_dir, TFR_PATTERN.format(self._mode)))
+        print(tfrecords)
         dataset = tf.data.TFRecordDataset(tfrecords)
         return self.__gen_input__(dataset, network_input_config)
 
