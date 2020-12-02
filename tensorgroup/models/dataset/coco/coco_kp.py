@@ -14,7 +14,7 @@ from typing import Text, Optional
 from tensorgroup.models.dataset.keypointnet_inputs import DefineInputs
 from tensorgroup.models.dataset import mode_keys as ModeKey
 
-POINT_RADIUS = 5  # 5的来源：点当作11*11的对象。这样可使得尽量重用centernet中的代码.
+POINT_RADIUS = 10  # 5的来源：点当作21*21的对象。这样可使得尽量重用centernet中的代码.
 TFR_PATTERN = '{}*.tfrecord'
 # dataset_utils
 
@@ -73,7 +73,7 @@ def get_annotations_dict(annotation_json_path):
         pc = PC[mark.get('label')]
         [c_x, c_y] = np.array(mark.get('points'), dtype=np.int)[0]
         ymin, ymax, xmin, xmax = (c_y - POINT_RADIUS)/im_h, (c_y + POINT_RADIUS)/im_h, (c_x - POINT_RADIUS)/im_w, (c_x + POINT_RADIUS)/im_w
-        points.append([ymin, ymax, xmin, xmax, pc])  # 一维N*5个元素.
+        points.extend([ymin, ymax, xmin, xmax, pc])  # 一维N*5个元素.
 
     annotation_dict = {'encoded_jpg': encoded_jpg,
                        'points': np.array(points, dtype=np.float32)}

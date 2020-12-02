@@ -82,7 +82,7 @@ def train(datasetName="three_point"):
                              datasetName=datasetName,
                              inputs_definer=inputs_definer,
                              mode=ModeKey.TRAIN,
-                             batch_size=2,
+                             batch_size=4,
                              num_exsamples=-1,
                              repeat_num=2,
                              buffer_size=10000)
@@ -99,7 +99,7 @@ def train(datasetName="three_point"):
     latest = tf.train.latest_checkpoint(checkpoint_dir)
     if latest is not None:
         train_model.load_weights(latest)
-    train_model.fit(dataset(keypointnet_input_config), epochs=10, callbacks=[cp_callback])
+    train_model.fit(dataset(keypointnet_input_config), epochs=300, callbacks=[cp_callback])
     train_model.save(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)))
 
 def predict(datasetName='three_keypoint'):
@@ -123,11 +123,12 @@ def predict(datasetName='three_keypoint'):
         return np.array(image), image
 
     predict_model.load_weights(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)), by_name=True, skip_mismatch=True)
-    for index in range(1, 2):
+    for index in range(3, 4):
         image_array, image = load_image(images_dir, index)
         draw = ImageDraw.Draw(image)
-        # print(image.size)
-        w, h = image.size  # 作了假设的哈：image.shape[2]=I_CH，偷懒。Bad smell
+        print(image.size)
+        print(image_array.shape)
+        h, w = image.size  # 作了假设的哈：image.shape[2]=I_CH，偷懒。Bad smell
 
         image_t = tf.convert_to_tensor(image_array)
         image_t = CKP.CocoKpInput.ImageNormalizer()(image_t)
@@ -135,18 +136,18 @@ def predict(datasetName='three_keypoint'):
         image_input = tf.expand_dims(image_t, axis=0)
         predicts = predict_model.predict(image_input)[0]
         scores = predicts[:, 2]
-        indices = np.where(scores > 0.2)
+        indices = np.where(scores > 0.10)
         detections = predicts[indices].copy()
         scale_w = (I_SIZE / w) * 0.25  # 注意
         scale_h = (I_SIZE / h) * 0.25
         for detection in detections:
             cx = int(round(detection[0])/scale_w)
             cy = int(round(detection[1])/scale_h)
-            # score = '{:.4f}'.format(detection[2])
+            score = '{:.4f}'.format(detection[2])
             # class_id = int(detection[3])
             # cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (255, 0, 0), 6)
-            print(cx, cy)
-            draw.ellipse((cx-5, cy-5, cx+5, cy+5), fill=(255, 0, 0), outline=(255, 0, 0), width=3)
+            print("{} {} {}".format(cx, cy, score))
+            draw.ellipse((cx-1, cy-1, cx+1, cy+1), fill=(255, 0, 0), outline=(255, 0, 0), width=1)
         plt.imshow(image)
         plt.show()
 
@@ -162,7 +163,7 @@ def build_Data_From_JSONs():  # 有必要注释一下目录结构 和约定目�
 
 if __name__ == '__main__':
     # build_Data_From_JSONs()
-    about_dataset_coco_kp()
+    # about_dataset_coco_kp()
     # about_resnetkeypoint()
     # train(datasetName="three_point")
-    # predict(datasetName="three_point")
+    predict(datasetName="three_point")

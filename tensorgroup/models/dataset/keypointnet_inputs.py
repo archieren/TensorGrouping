@@ -19,7 +19,7 @@ class DefineInputs:
                'flip_prob': [0., 0.5],
                'fill_mode': 'BILINEAR',
                'color_jitter_prob': 0.5,
-               'pad_truth_to': 100,                                   # Must match the maximal objects!
+               'pad_truth_to': 10,                                   # Must match the maximal objects!
               }
             num_classes:
         """
