@@ -57,7 +57,7 @@ def floor_rsu(rsu, up_down_scale, side_c):
         return side_fuse, up_out
     return f
 
-def U_2_Net(side_c=1, is_simple=False):
+def U_2_Net(side_c=1, is_simple=False, output_name='side_all'):
     if not is_simple:
         rsu_d0 = RSU.RSU7(filters=64, mid_filters=32)
         rsu_d1 = RSU.RSU6(filters=128, mid_filters=32)
@@ -129,25 +129,27 @@ def U_2_Net(side_c=1, is_simple=False):
         side_fuse = KL.Conv2D(side_c, kernel_size=1, padding='same')(side_fuse)  # kernel_size=3
         side_fuse = KL.Activation('sigmoid', name='side_fuse')(side_fuse)
 
-        # side_5 = KL.Activation('sigmoid', name='side_5')(side_5)
-        # side_4 = KL.Activation('sigmoid', name='side_4')(side_4)
-        # side_3 = KL.Activation('sigmoid', name='side_3')(side_3)
-        # side_2 = KL.Activation('sigmoid', name='side_2')(side_2)
-        # side_1 = KL.Activation('sigmoid', name='side_1')(side_1)
-        # side_0 = KL.Activation('sigmoid', name='side_0')(side_0)
+        if output_name != 'side_fuse':
+            side_5 = KL.Activation('sigmoid', name='side_5')(side_5)
+            side_4 = KL.Activation('sigmoid', name='side_4')(side_4)
+            side_3 = KL.Activation('sigmoid', name='side_3')(side_3)
+            side_2 = KL.Activation('sigmoid', name='side_2')(side_2)
+            side_1 = KL.Activation('sigmoid', name='side_1')(side_1)
+            side_0 = KL.Activation('sigmoid', name='side_0')(side_0)
 
-        # # 拼到一起输出,应当也可以！！！
-        # side_out = KL.concatenate([side_fuse, side_0, side_1, side_2, side_3, side_4, side_5], name='side_all')
-        side_out = side_fuse
+            # 拼到一起输出,应当也可以！！！
+            side_out = KL.concatenate([side_fuse, side_0, side_1, side_2, side_3, side_4, side_5], name=output_name)
+        else:
+            side_out = side_fuse
         return side_out
 
     return f
 
 class U2netBuilder(object):
     @staticmethod
-    def u_2_net(input_shape, side_c=1, name='U-2-NET'):
+    def u_2_net(input_shape, side_c=1, name='U-2-NET', output_name='side_all'):
         x = KL.Input(shape=input_shape, name='image')
-        side_out = U_2_Net(side_c=side_c)(x)
+        side_out = U_2_Net(side_c=side_c, is_simple=False, output_name=output_name)(x)
 
         model = KM.Model(inputs=x, outputs=side_out, name=name)
 
@@ -156,9 +158,9 @@ class U2netBuilder(object):
         return model
 
     @staticmethod
-    def u_2_net_p(input_shape, side_c=1, name='U-2-NET-Simple'):
+    def u_2_net_p(input_shape, side_c=1, name='U-2-NET-Simple', output_name='side_all'):
         x = KL.Input(shape=input_shape, name='image')
-        side_out = U_2_Net(side_c=side_c, is_simple=True)(x)
+        side_out = U_2_Net(side_c=side_c, is_simple=True, output_name=output_name)(x)
 
         model = KM.Model(inputs=x, outputs=side_out, name=name)
 

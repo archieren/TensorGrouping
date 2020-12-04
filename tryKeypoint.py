@@ -123,7 +123,7 @@ def predict(datasetName='three_keypoint'):
         return np.array(image), image
 
     predict_model.load_weights(os.path.join(saved_model_dir, '{}.h5'.format(datasetName)), by_name=True, skip_mismatch=True)
-    for index in range(3, 4):
+    for index in range(1, 6):
         image_array, image = load_image(images_dir, index)
         draw = ImageDraw.Draw(image)
         print(image.size)
@@ -147,7 +147,7 @@ def predict(datasetName='three_keypoint'):
             # class_id = int(detection[3])
             # cv2.rectangle(image, (xmin, ymin), (xmax, ymax), (255, 0, 0), 6)
             print("{} {} {}".format(cx, cy, score))
-            draw.ellipse((cx-1, cy-1, cx+1, cy+1), fill=(255, 0, 0), outline=(255, 0, 0), width=1)
+            draw.ellipse((cx-5, cy-5, cx+5, cy+5), fill=(255, 0, 0), outline=(255, 0, 0), width=1)
         plt.imshow(image)
         plt.show()
 

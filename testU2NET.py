@@ -29,7 +29,7 @@ u_2_net_input_config = {
     'data_format': 'channels_last',
     'network_input_size': [I_SIZE, I_SIZE],                          # Must match the network's input_shape!
     'in_name': 'image',
-    'out_name': 'side_fuse'                                          # 'side_all'
+    'out_name': 'side_all'                                          # 'side_all' 'side_fuse'
 }
 
 # model = U2B.U2netBuilder.u_2_net(input_shape=(1024, 1024, 3))
@@ -68,7 +68,7 @@ def about_mask_dataset(dataset='catenary'):
 def train(dataset='catenary', model_t='u_2_net_p'):
     tfr_dir = os.path.join(os.getcwd(), 'data_u_2_mask', dataset, 'tf_records')  # "./data_u_2_mask/catenary/tf_records"
     inputs_definer = DefineInputs
-    trainset = mask.MaskInputs(tfr_dir, inputs_definer=inputs_definer, batch_size=2, num_exsamples=-1, repeat_num=2, buffer_size=1000)
+    trainset = mask.MaskInputs(tfr_dir, inputs_definer=inputs_definer, batch_size=1, num_exsamples=-1, repeat_num=1, buffer_size=1000)
 
     checkpoint_dir = os.path.join(os.getcwd(), 'work', model_t, dataset, 'ckpt')
     saved_model_dir = os.path.join(os.getcwd(), 'work', model_t, dataset, 'sm')
@@ -98,12 +98,12 @@ def normPred(p):
 
 def predict(dataset='catenary', model_t='u_2_net_p'):
     saved_model_dir = os.path.join(os.getcwd(), 'work', model_t, dataset, 'sm')
-    model = U2B.U2netBuilder.u_2_net_p(input_shape=(I_SIZE, I_SIZE, 3))
+    model = U2B.U2netBuilder.u_2_net_p(input_shape=(None, None, 3))
     model.load_weights(os.path.join(saved_model_dir, '{}_model.h5'.format(dataset)), by_name=True, skip_mismatch=True)
     path = os.path.join(os.getcwd(), 'data_u_2_mask', dataset, 'TestImages', '3.jpg')
-    image = Image.open(path)
-    image = image.convert("RGB")
-    image = np.array(image)
+    image_in = Image.open(path)
+    image_in = image_in.convert("RGB")
+    image = np.array(image_in)
     # image = cv2.imread(path)
     # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image_t = tf.convert_to_tensor(image)
@@ -112,9 +112,15 @@ def predict(dataset='catenary', model_t='u_2_net_p'):
     image_t = tf.image.resize(image_t, [1024, 1024], method=tf.image.ResizeMethod.BILINEAR)
     image_input = tf.expand_dims(image_t, axis=0)
     predict = model.predict(image_input)[0]  # 看说明， model predict返回的是numpy array?
-    predict = Image.fromarray((predict * 255).reshape([1024, 1024]))
-    print(predict.mode)
-    plt.imshow(predict)
+    fig = plt.figure()
+    p_rows, p_cols = 2, 4
+    for i in range(7):
+        raw_result = predict[..., i]
+        result_i = Image.fromarray((raw_result * 255).reshape([1024, 1024]))
+        fig.add_subplot(p_rows, p_cols, i+1)
+        plt.imshow(result_i)
+    fig.add_subplot(p_rows, p_cols, 8)
+    plt.imshow(image_in)
     plt.show()
     pass
 
