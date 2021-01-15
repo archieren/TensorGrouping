@@ -3,7 +3,7 @@ import os
 import datetime
 
 from tensorgroup.models.networks.layers.sn import SpectralNormalization
-from tensorgroup.models.networks.layers.sa import SN_Attention
+from tensorgroup.models.networks.layers.sa import Attention as SN_Attention
 
 K = tf.keras
 KA = tf.keras.applications
@@ -103,9 +103,9 @@ for epoch in range(num_epochs):
     print("Epoch {:03d}: Loss: {:.3f}, Acc: {:.3%}".format(epoch,
                                                            train_epoch_loss.result(),
                                                            train_epoch_accuracy.result()))
-    with train_summary_writer.as_default():
-        tf.summary.scalar('loss', train_epoch_loss.result(), step=epoch)
-        tf.summary.scalar('accuracy', train_epoch_accuracy.result(), step=epoch)
+    # with train_summary_writer.as_default():
+    #     tf.summary.scalar('loss', train_epoch_loss.result(), step=epoch)
+    #     tf.summary.scalar('accuracy', train_epoch_accuracy.result(), step=epoch)
 
     train_epoch_loss.reset_states()
     train_epoch_accuracy.reset_states()
